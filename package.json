@@ -1,0 +1,255 @@
+{
+  "name": "writerdown",
+  "displayName": "WriterDown",
+  "description": "Enhanced Markdown syntax highlighting for writers",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "writing",
+    "syntax highlighting",
+    "writers"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "writerdown",
+        "aliases": [
+          "WriterDown",
+          "writerdown"
+        ],
+        "extensions": [
+          ".md"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "writerdown",
+        "scopeName": "text.html.markdown.writerdown",
+        "path": "./syntaxes/writerdown.tmLanguage.json"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "markup.dialogue.writerdown": [
+            "string.dialogue.writerdown"
+          ],
+          "markup.dialogue.speech.writerdown": [
+            "string.dialogue.speech.writerdown"
+          ]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "markup.dialogue.writerdown",
+            "settings": {
+              "foreground": "#E5C07B",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "scope": "markup.dialogue.speech.writerdown",
+            "settings": {
+              "foreground": "#98C379",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "scope": "markup.character.writerdown",
+            "settings": {
+              "foreground": "#61AFEF",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "entity.name.character.writerdown",
+            "settings": {
+              "foreground": "#E06C75",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "punctuation.definition.character.writerdown",
+            "settings": {
+              "foreground": "#61AFEF",
+              "fontStyle": "bold"
+            }
+          }
+        ]
+      }
+    },
+    "commands": [
+      {
+        "command": "writerdown.setLanguage",
+        "title": "Set Language to WriterDown",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.refreshCharacters",
+        "title": "Refresh Characters",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "writerdown.newCharacter",
+        "title": "New Character",
+        "icon": "$(add)"
+      },
+      {
+        "command": "writerdown.openCharacterCard",
+        "title": "Open Character Card",
+        "icon": "$(person)"
+      },
+      {
+        "command": "writerdown.goToCharacter",
+        "title": "Go to Character Mention",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "writerdown.refreshTasks",
+        "title": "Refresh Writer Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "writerdown.goToTask",
+        "title": "Go to Task",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "writerdown.refreshStructure",
+        "title": "Refresh Structure",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "writerdown.goToStructure",
+        "title": "Go to Structure",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "writerdown.newChapter",
+        "title": "New Chapter",
+        "icon": "$(add)"
+      },
+      {
+        "command": "writerdown.runTests",
+        "title": "Run WriterDown Tests",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.showWordCountDetails",
+        "title": "Show Word Count Details",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.showPageCountDetails",
+        "title": "Show Page Count Details",
+        "category": "WriterDown"
+      }
+    ],
+    "views": {
+      "writerdown-sidebar": [
+        {
+          "id": "writerdown-structure",
+          "name": "Story Structure"
+        },
+        {
+          "id": "writerdown-characters",
+          "name": "Characters"
+        },
+        {
+          "id": "writerdown-tasks",
+          "name": "Writer Tasks"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "writerdown-sidebar",
+          "title": "WriterDown",
+          "icon": "$(book)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "writerdown.refreshStructure",
+          "when": "view == writerdown-structure",
+          "group": "navigation"
+        },
+        {
+          "command": "writerdown.newChapter",
+          "when": "view == writerdown-structure",
+          "group": "navigation"
+        },
+        {
+          "command": "writerdown.refreshCharacters",
+          "when": "view == writerdown-characters",
+          "group": "navigation"
+        },
+        {
+          "command": "writerdown.newCharacter",
+          "when": "view == writerdown-characters",
+          "group": "navigation"
+        },
+        {
+          "command": "writerdown.refreshTasks",
+          "when": "view == writerdown-tasks",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "writerdown.goToStructure",
+          "when": "view == writerdown-structure",
+          "group": "inline"
+        },
+        {
+          "command": "writerdown.openCharacterCard",
+          "when": "view == writerdown-characters",
+          "group": "inline"
+        },
+        {
+          "command": "writerdown.goToCharacter",
+          "when": "view == writerdown-characters",
+          "group": "inline@2"
+        },
+        {
+          "command": "writerdown.goToTask",
+          "when": "view == writerdown-tasks",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && echo 'Tests are integrated into VS Code extension. Use \"WriterDown: Run Tests\" command in VS Code.'"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@types/mocha": "^10.0.1",
+    "@types/glob": "^8.1.0",
+    "@vscode/test-electron": "^2.3.0",
+    "typescript": "^4.9.4",
+    "mocha": "^10.2.0",
+    "glob": "^8.1.0"
+  }
+}

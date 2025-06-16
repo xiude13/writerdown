@@ -1,0 +1,235 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WriterDown",
+  "scopeName": "text.html.markdown.writerdown",
+  "patterns": [
+    {
+      "include": "#writer-annotations"
+    },
+    {
+      "include": "#writer-highlights"
+    },
+    {
+      "include": "#character-notes"
+    },
+    {
+      "include": "#dialogue"
+    },
+    {
+      "include": "#scene-markers"
+    },
+    {
+      "include": "#plot-notes"
+    },
+    {
+      "include": "#markdown-base"
+    }
+  ],
+  "repository": {
+    "writer-annotations": {
+      "patterns": [
+        {
+          "name": "markup.other.annotation.writerdown",
+          "match": "\\[\\[([^\\]]+)\\]\\]",
+          "captures": {
+            "1": {
+              "name": "string.other.annotation.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "writer-highlights": {
+      "patterns": [
+        {
+          "name": "markup.highlight.todo.writerdown",
+          "match": "\\{\\{TODO:([^}]+)\\}\\}",
+          "captures": {
+            "1": {
+              "name": "string.other.todo.writerdown"
+            }
+          }
+        },
+        {
+          "name": "markup.highlight.research.writerdown",
+          "match": "\\{\\{RESEARCH:([^}]+)\\}\\}",
+          "captures": {
+            "1": {
+              "name": "string.other.research.writerdown"
+            }
+          }
+        },
+        {
+          "name": "markup.highlight.edit.writerdown",
+          "match": "\\{\\{EDIT:([^}]+)\\}\\}",
+          "captures": {
+            "1": {
+              "name": "string.other.edit.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "character-notes": {
+      "patterns": [
+        {
+          "name": "markup.character.writerdown",
+          "match": "(@)([A-Za-z0-9_]+)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.character.writerdown"
+            },
+            "2": {
+              "name": "entity.name.character.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "dialogue": {
+      "patterns": [
+        {
+          "name": "markup.dialogue.writerdown",
+          "match": "\"([^\"\\n\\r]*)\"",
+          "captures": {
+            "0": {
+              "name": "markup.dialogue.writerdown"
+            },
+            "1": {
+              "name": "markup.dialogue.speech.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "scene-markers": {
+      "patterns": [
+        {
+          "name": "markup.heading.scene.writerdown",
+          "match": "^(\\*\\*\\* SCENE \\d+.*?)$",
+          "captures": {
+            "1": {
+              "name": "markup.heading.scene.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "plot-notes": {
+      "patterns": [
+        {
+          "name": "markup.plot.writerdown",
+          "match": "\\[PLOT:([^\\]]+)\\]",
+          "captures": {
+            "1": {
+              "name": "string.other.plot.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "markdown-base": {
+      "patterns": [
+        {
+          "name": "markup.heading.markdown",
+          "match": "^(#{1,6})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.bold.markdown",
+          "match": "(\\*\\*|__)([^*_]+)(\\*\\*|__)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.bold.markdown"
+            },
+            "2": {
+              "name": "markup.bold.markdown"
+            },
+            "3": {
+              "name": "punctuation.definition.bold.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.italic.markdown",
+          "match": "(\\*|_)([^*_]+)(\\*|_)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.italic.markdown"
+            },
+            "2": {
+              "name": "markup.italic.markdown"
+            },
+            "3": {
+              "name": "punctuation.definition.italic.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.inline.raw.markdown",
+          "match": "(`+)([^`]+)(\\1)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.raw.markdown"
+            },
+            "2": {
+              "name": "markup.inline.raw.markdown"
+            },
+            "3": {
+              "name": "punctuation.definition.raw.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.underline.link.markdown",
+          "match": "\\[([^\\]]+)\\]\\(([^)]+)\\)",
+          "captures": {
+            "1": {
+              "name": "string.other.link.title.markdown"
+            },
+            "2": {
+              "name": "markup.underline.link.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.list.unnumbered.markdown",
+          "match": "^\\s*([-*+])\\s+",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.list_item.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.list.numbered.markdown",
+          "match": "^\\s*(\\d+\\.)\\s+",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.list_item.numbered.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.quote.markdown",
+          "match": "^\\s*(>+)\\s*(.*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.quote.markdown"
+            },
+            "2": {
+              "name": "markup.quote.markdown"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
