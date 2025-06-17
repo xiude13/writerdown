@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
-import { CharacterInfo, CharacterProvider } from './characterProvider';
+import { CharacterInfo, CharacterProvider, CharacterTreeItem } from './characterProvider';
+import { exportNovel } from './export-novel';
+import { MarkerInfo, MarkerProvider } from './markerProvider';
+import { NovelFormatter } from './novelFormatter';
 import { StructureInfo, StructureProvider } from './structureProvider';
-import { activateTests } from './test/basicTests';
 import { TodoInfo, TodoProvider } from './todoProvider';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -11,9 +13,16 @@ export function activate(context: vscode.ExtensionContext) {
   const characterProvider = new CharacterProvider();
   const todoProvider = new TodoProvider();
   const structureProvider = new StructureProvider();
+  const markerProvider = new MarkerProvider();
 
-  // Activate test commands
-  activateTests(context);
+  // Activate test commands (optional - only in development)
+  try {
+    const { activateTests } = require('./test/basicTests');
+    activateTests(context);
+    console.log('Test commands activated');
+  } catch (error) {
+    console.log('Test commands not available (production mode)');
+  }
 
   // Create status bar items
   const wordCountStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
@@ -36,6 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
       .replace(/\[PLOT:.*?\]/gi, '')
       // Remove character mentions (but keep the name)
       .replace(/@([A-Za-z0-9_]+)/g, '$1')
+      .replace(/@\[([^\]]+)\]/g, '$1')
       // Remove general notes
       .replace(/\[\[.*?\]\]/g, '')
       // Remove writer tasks
@@ -130,10 +140,21 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: false,
   });
 
+  // Set the tree view on the provider for access to VS Code features
+  characterProvider.setTreeView(characterTreeView);
+
   const todoTreeView = vscode.window.createTreeView('writerdown-tasks', {
     treeDataProvider: todoProvider,
     showCollapseAll: false,
   });
+
+  const markerTreeView = vscode.window.createTreeView('writerdown-markers', {
+    treeDataProvider: markerProvider,
+    showCollapseAll: false,
+  });
+
+  // Set the tree view on the provider for access to VS Code features
+  markerProvider.setTreeView(markerTreeView);
 
   // Register command to set language to WriterDown
   const setLanguageCommand = vscode.commands.registerCommand('writerdown.setLanguage', async () => {
@@ -151,7 +172,12 @@ export function activate(context: vscode.ExtensionContext) {
   const refreshAllProviders = async () => {
     console.log('Refreshing all providers...');
     try {
-      await Promise.all([structureProvider.refresh(), characterProvider.refresh(), todoProvider.refresh()]);
+      await Promise.all([
+        structureProvider.refresh(),
+        characterProvider.refresh(),
+        todoProvider.refresh(),
+        markerProvider.refresh(),
+      ]);
       console.log('All providers refreshed successfully');
     } catch (error) {
       console.error('Error refreshing providers:', error);
@@ -228,6 +254,90 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const renameCharacterCommand = vscode.commands.registerCommand(
+    'writerdown.renameCharacter',
+    async (treeItem?: CharacterTreeItem | CharacterInfo, ...args: any[]) => {
+      console.log('Rename character command called with:', treeItem, 'args:', args);
+
+      let characterInfo: CharacterInfo | undefined;
+
+      // Try to extract character info from different possible parameter types
+      if (treeItem) {
+        if ('characterInfo' in treeItem) {
+          // It's a CharacterTreeItem
+          characterInfo = treeItem.characterInfo;
+        } else if ('name' in treeItem && 'count' in treeItem) {
+          // It's already a CharacterInfo
+          characterInfo = treeItem as CharacterInfo;
+        }
+      }
+
+      if (characterInfo && characterInfo.name) {
+        console.log('Found character info:', characterInfo.name);
+        await characterProvider.renameCharacter(characterInfo);
+      } else {
+        console.log('No valid character info found, treeItem:', treeItem);
+        vscode.window.showErrorMessage('No character selected for rename');
+      }
+    },
+  );
+
+  const changeCategoryCommand = vscode.commands.registerCommand(
+    'writerdown.changeCategory',
+    async (treeItem?: CharacterTreeItem | CharacterInfo, ...args: any[]) => {
+      console.log('Change category command called with:', treeItem, 'args:', args);
+
+      let characterInfo: CharacterInfo | undefined;
+
+      // Try to extract character info from different possible parameter types
+      if (treeItem) {
+        if ('characterInfo' in treeItem) {
+          // It's a CharacterTreeItem
+          characterInfo = treeItem.characterInfo;
+        } else if ('name' in treeItem && 'count' in treeItem) {
+          // It's already a CharacterInfo
+          characterInfo = treeItem as CharacterInfo;
+        }
+      }
+
+      if (characterInfo && characterInfo.name) {
+        console.log('Found character info for category change:', characterInfo.name);
+        await characterProvider.changeCategoryCharacter(characterInfo);
+      } else {
+        console.log('No valid character info found for category change, treeItem:', treeItem);
+        vscode.window.showErrorMessage('No character selected for category change');
+      }
+    },
+  );
+
+  const assignCategoryCommand = vscode.commands.registerCommand(
+    'writerdown.assignCategory',
+    async (treeItem?: CharacterTreeItem | CharacterInfo, ...args: any[]) => {
+      console.log('Assign category command called with:', treeItem, 'args:', args);
+
+      let characterInfo: CharacterInfo | undefined;
+
+      // Try to extract character info from different possible parameter types
+      if (treeItem) {
+        if ('characterInfo' in treeItem) {
+          // It's a CharacterTreeItem
+          characterInfo = treeItem.characterInfo;
+        } else if ('name' in treeItem && 'count' in treeItem) {
+          // It's already a CharacterInfo
+          characterInfo = treeItem as CharacterInfo;
+        }
+      }
+
+      if (characterInfo && characterInfo.name) {
+        console.log('Found character info for category assignment:', characterInfo.name);
+        await characterProvider.assignCategoryCharacter(characterInfo);
+      } else {
+        console.log('No valid character info found for category assignment, treeItem:', treeItem);
+        vscode.window.showErrorMessage('No character selected for category assignment');
+      }
+    },
+  );
+
   // Register TODO commands
   const refreshTasksCommand = vscode.commands.registerCommand('writerdown.refreshTasks', async () => {
     await todoProvider.refresh();
@@ -242,6 +352,83 @@ export function activate(context: vscode.ExtensionContext) {
     // Then navigate to the position
     editor.selection = new vscode.Selection(todoInfo.position, todoInfo.position);
     editor.revealRange(new vscode.Range(todoInfo.position, todoInfo.position));
+  });
+
+  // Register marker commands
+  const refreshMarkersCommand = vscode.commands.registerCommand('writerdown.refreshMarkers', async () => {
+    await markerProvider.refresh();
+    vscode.window.showInformationMessage('Markers refreshed');
+  });
+
+  const goToMarkerCommand = vscode.commands.registerCommand('writerdown.goToMarker', async (markerInfo: MarkerInfo) => {
+    await markerProvider.goToMarker(markerInfo);
+  });
+
+  const addChapterMetadataCommand = vscode.commands.registerCommand('writerdown.addChapterMetadata', async () => {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+      vscode.window.showWarningMessage('No active editor found');
+      return;
+    }
+
+    await markerProvider.addMetadataToChapter(activeEditor.document.fileName);
+    await refreshAllProviders();
+    vscode.window.showInformationMessage('Chapter metadata added');
+  });
+
+  // Register marker search commands
+  const searchStoryEventsCommand = vscode.commands.registerCommand('writerdown.searchStoryEvents', () => {
+    markerProvider.searchMarkers();
+  });
+
+  const clearStoryEventsSearchCommand = vscode.commands.registerCommand('writerdown.clearStoryEventsSearch', () => {
+    markerProvider.clearSearch();
+  });
+
+  // Register character search commands
+  const searchCharactersCommand = vscode.commands.registerCommand('writerdown.searchCharacters', () => {
+    characterProvider.searchCharacters();
+  });
+
+  const clearCharactersSearchCommand = vscode.commands.registerCommand('writerdown.clearCharactersSearch', () => {
+    characterProvider.clearSearch();
+  });
+
+  // Register panel focus navigation commands
+  const panelOrder = ['writerdown-structure', 'writerdown-markers', 'writerdown-characters', 'writerdown-tasks'];
+  let currentPanelIndex = 0;
+
+  const focusNextPanelCommand = vscode.commands.registerCommand('writerdown.focusNextPanel', () => {
+    currentPanelIndex = (currentPanelIndex + 1) % panelOrder.length;
+    const nextPanel = panelOrder[currentPanelIndex];
+
+    vscode.commands.executeCommand('workbench.view.extension.writerdown-sidebar');
+    setTimeout(() => vscode.commands.executeCommand(`${nextPanel}.focus`), 100);
+  });
+
+  const focusPreviousPanelCommand = vscode.commands.registerCommand('writerdown.focusPreviousPanel', () => {
+    currentPanelIndex = currentPanelIndex <= 0 ? panelOrder.length - 1 : currentPanelIndex - 1;
+    const previousPanel = panelOrder[currentPanelIndex];
+
+    vscode.commands.executeCommand('workbench.view.extension.writerdown-sidebar');
+    setTimeout(() => vscode.commands.executeCommand(`${previousPanel}.focus`), 100);
+  });
+
+  const resetPanelOrderCommand = vscode.commands.registerCommand('writerdown.resetPanelOrder', async () => {
+    const selection = await vscode.window.showInformationMessage(
+      'VS Code does not provide an API to programmatically reorder panels.\n\nTo reset panel order manually:\n1. Right-click on panel titles\n2. Drag panels to this order: Structure → Story Events → Characters → Writer Tasks\n\nThis will ensure Alt+Up/Down navigation works correctly.',
+      { modal: true },
+      'Open Settings',
+      'OK',
+    );
+
+    if (selection === 'Open Settings') {
+      // Reset the current panel index for keyboard navigation
+      currentPanelIndex = 0;
+
+      // Open the settings where users can see the extension
+      await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:writerdown');
+    }
   });
 
   // Refresh all providers command (for debugging)
@@ -279,6 +466,119 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Register novel formatting commands
+  const formatNovelCommand = vscode.commands.registerCommand('writerdown.formatNovel', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage('No active editor found');
+      return;
+    }
+
+    if (!editor.document.fileName.endsWith('.md')) {
+      vscode.window.showErrorMessage('Novel formatting is only available for Markdown files');
+      return;
+    }
+
+    try {
+      const formattedText = await NovelFormatter.formatDocument(editor.document);
+      const fullRange = new vscode.Range(
+        editor.document.positionAt(0),
+        editor.document.positionAt(editor.document.getText().length),
+      );
+
+      await editor.edit((editBuilder) => {
+        editBuilder.replace(fullRange, formattedText);
+      });
+
+      vscode.window.showInformationMessage('Novel formatting applied successfully');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error formatting novel: ${error}`);
+    }
+  });
+
+  const cleanIndentationCommand = vscode.commands.registerCommand('writerdown.cleanIndentation', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage('No active editor found');
+      return;
+    }
+
+    try {
+      const cleanedText = NovelFormatter.cleanMarkdownIndentation(editor.document.getText());
+      const fullRange = new vscode.Range(
+        editor.document.positionAt(0),
+        editor.document.positionAt(editor.document.getText().length),
+      );
+
+      await editor.edit((editBuilder) => {
+        editBuilder.replace(fullRange, cleanedText);
+      });
+
+      vscode.window.showInformationMessage('Markdown indentation cleaned successfully');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error cleaning indentation: ${error}`);
+    }
+  });
+
+  const exportNovelCommand = vscode.commands.registerCommand('writerdown.exportNovel', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage('No active editor found');
+      return;
+    }
+
+    const format = await vscode.window.showQuickPick(['docx', 'html', 'pdf'], { placeHolder: 'Select export format' });
+
+    if (!format) return;
+
+    try {
+      // Use the standalone export function
+      await exportNovel({
+        input: editor.document.fileName,
+        format: format as 'docx' | 'html' | 'pdf',
+      });
+
+      vscode.window.showInformationMessage(`Novel exported successfully in ${format.toUpperCase()} format`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error exporting novel: ${error}`);
+    }
+  });
+
+  const debugStructureCommand = vscode.commands.registerCommand('writerdown.debugStructure', async () => {
+    console.log('=== DEBUG STRUCTURE PROVIDER ===');
+
+    // Check workspace
+    if (!vscode.workspace.workspaceFolders) {
+      vscode.window.showErrorMessage('No workspace folder found');
+      return;
+    }
+
+    console.log('Workspace folder:', vscode.workspace.workspaceFolders[0].uri.fsPath);
+
+    // Check for Book folder
+    try {
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      console.log(`Found ${files.length} markdown files in Book folder:`);
+      files.forEach((file) => console.log('  -', file.fsPath));
+
+      // Force refresh structure provider
+      await structureProvider.refresh();
+
+      const allStructure = structureProvider.getAllStructure();
+      console.log(`Structure provider has ${allStructure.length} items:`);
+      allStructure.forEach((item) => {
+        console.log(`  - ${item.type}: ${item.title} (${item.fileName}:${item.lineNumber})`);
+      });
+
+      vscode.window.showInformationMessage(
+        `Debug complete. Found ${files.length} files, ${allStructure.length} structure items. Check console for details.`,
+      );
+    } catch (error) {
+      console.error('Debug error:', error);
+      vscode.window.showErrorMessage(`Debug error: ${error}`);
+    }
+  });
+
   context.subscriptions.push(
     setLanguageCommand,
     refreshStructureCommand,
@@ -289,14 +589,32 @@ export function activate(context: vscode.ExtensionContext) {
     openCharacterCardCommand,
     goToCharacterCommand,
     goToCharacterReferenceCommand,
+    renameCharacterCommand,
+    changeCategoryCommand,
+    assignCategoryCommand,
     refreshTasksCommand,
     goToTaskCommand,
+    refreshMarkersCommand,
+    goToMarkerCommand,
+    addChapterMetadataCommand,
+    searchStoryEventsCommand,
+    clearStoryEventsSearchCommand,
+    searchCharactersCommand,
+    clearCharactersSearchCommand,
+    focusNextPanelCommand,
+    focusPreviousPanelCommand,
+    resetPanelOrderCommand,
     refreshAllCommand,
     showWordCountDetailsCommand,
     showPageCountDetailsCommand,
     structureTreeView,
     characterTreeView,
     todoTreeView,
+    markerTreeView,
+    formatNovelCommand,
+    cleanIndentationCommand,
+    exportNovelCommand,
+    debugStructureCommand,
   );
 
   // Auto-detect .md files and suggest WriterDown language
@@ -416,21 +734,32 @@ class CharacterDefinitionProvider implements vscode.DefinitionProvider {
     position: vscode.Position,
     token: vscode.CancellationToken,
   ): Promise<vscode.Definition | undefined> {
-    // Get the word at the current position
-    const wordRange = document.getWordRangeAtPosition(position, /@[A-Za-z0-9_]+/);
-    if (!wordRange) {
-      return undefined;
+    // Get the word at the current position - try bracketed first, then single word
+    let wordRange = document.getWordRangeAtPosition(position, /@\[[^\]]+\]/);
+    let characterName: string | undefined;
+
+    if (wordRange) {
+      // Bracketed character name
+      const word = document.getText(wordRange);
+      const bracketedMatch = word.match(/@\[([^\]]+)\]/);
+      if (bracketedMatch) {
+        characterName = bracketedMatch[1];
+      }
+    } else {
+      // Try single word character name
+      wordRange = document.getWordRangeAtPosition(position, /@[A-Za-z0-9_]+/);
+      if (wordRange) {
+        const word = document.getText(wordRange);
+        const singleWordMatch = word.match(/@([A-Za-z0-9_]+)/);
+        if (singleWordMatch) {
+          characterName = singleWordMatch[1];
+        }
+      }
     }
 
-    const word = document.getText(wordRange);
-
-    // Check if it's a character mention
-    const characterMatch = word.match(/@([A-Za-z0-9_]+)/);
-    if (!characterMatch) {
+    if (!characterName || !wordRange) {
       return undefined;
     }
-
-    const characterName = characterMatch[1];
 
     // Get character info from the provider
     const characterInfo = this.characterProvider.getCharacterInfo(characterName);
@@ -467,13 +796,22 @@ class CharacterCompletionProvider implements vscode.CompletionItemProvider {
     const lineText = document.lineAt(position).text;
     const textBeforeCursor = lineText.substring(0, position.character);
 
-    // Check if we're after an @ symbol
-    const atMatch = textBeforeCursor.match(/@([A-Za-z0-9_]*)$/);
-    if (!atMatch) {
+    // Check if we're after an @ symbol (for both @Name and @[Name formats)
+    const singleWordMatch = textBeforeCursor.match(/@([A-Za-z0-9_]*)$/);
+    const bracketedMatch = textBeforeCursor.match(/@\[([^\]]*)$/);
+
+    let partialName = '';
+    let isBracketed = false;
+
+    if (bracketedMatch) {
+      partialName = bracketedMatch[1];
+      isBracketed = true;
+    } else if (singleWordMatch) {
+      partialName = singleWordMatch[1];
+      isBracketed = false;
+    } else {
       return [];
     }
-
-    const partialName = atMatch[1];
 
     // Get all characters from the provider
     const allCharacters = this.characterProvider.getAllCharacters();
@@ -484,8 +822,19 @@ class CharacterCompletionProvider implements vscode.CompletionItemProvider {
       .map((char) => {
         const completionItem = new vscode.CompletionItem(char.name, vscode.CompletionItemKind.Reference);
 
-        // Set the text to insert (just the character name, since @ is already typed)
-        completionItem.insertText = char.name;
+        // Set the text to insert based on format and character name
+        const hasSpaces = char.name.includes(' ');
+
+        if (isBracketed) {
+          // For @[Name] format, insert the rest: Name]
+          completionItem.insertText = char.name + ']';
+        } else if (hasSpaces) {
+          // For @Name format with spaces, insert [Name]
+          completionItem.insertText = `[${char.name}]`;
+        } else {
+          // For @Name format without spaces, just insert the character name
+          completionItem.insertText = char.name;
+        }
 
         // Add details about the character
         completionItem.detail = `Character (${char.count} mentions across ${
@@ -493,7 +842,7 @@ class CharacterCompletionProvider implements vscode.CompletionItemProvider {
         } files)`;
 
         // Set filter text to include the @ symbol for better matching
-        completionItem.filterText = `@${char.name}`;
+        completionItem.filterText = isBracketed ? `@[${char.name}` : `@${char.name}`;
 
         // Set completion item kind for icon
         completionItem.kind = vscode.CompletionItemKind.Reference;

@@ -4,11 +4,12 @@ import * as vscode from 'vscode';
 export interface StructureInfo {
   title: string;
   level: number; // 1 = Act, 2 = Chapter, 3 = Section
-  type: 'act' | 'chapter' | 'section';
+  type: 'act' | 'chapter' | 'section' | 'folder';
   position: vscode.Position;
   lineNumber: number;
   fileName: string;
   filePath: string;
+  folderPath?: string; // Relative path from Book/ (e.g., "Part1", "Part2/Chapter1")
 }
 
 export class StructureTreeItem extends vscode.TreeItem {
@@ -67,8 +68,12 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
   }
 
   async refresh(): Promise<void> {
+    console.log('StructureProvider: Starting refresh...');
     await this.scanForStructure();
     this.buildHierarchy();
+    console.log(
+      `StructureProvider: Refresh complete. Found ${this.structure.length} items, ${this.hierarchicalStructure.length} root items`,
+    );
     this._onDidChangeTreeData.fire();
   }
 
@@ -78,69 +83,105 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
 
   getChildren(element?: StructureTreeItem): Thenable<StructureTreeItem[]> {
     if (!element) {
+      console.log(
+        `StructureProvider: getChildren called for root, returning ${this.hierarchicalStructure.length} items`,
+      );
       return Promise.resolve(this.hierarchicalStructure);
     }
+    console.log(
+      `StructureProvider: getChildren called for ${element.structureInfo.title}, returning ${element.children.length} children`,
+    );
     return Promise.resolve(element.children);
   }
 
   private buildHierarchy(): void {
     this.hierarchicalStructure = [];
 
-    // Group items by file first, then build hierarchy within each file
-    const fileGroups = new Map<string, StructureInfo[]>();
+    // Create a map to track folder nodes
+    const folderMap = new Map<string, StructureTreeItem>();
+
+    // Group items by folder path
+    const itemsByFolder = new Map<string, StructureInfo[]>();
 
     for (const item of this.structure) {
-      const key = item.fileName;
-      if (!fileGroups.has(key)) {
-        fileGroups.set(key, []);
+      const folderKey = item.folderPath || '';
+      if (!itemsByFolder.has(folderKey)) {
+        itemsByFolder.set(folderKey, []);
       }
-      fileGroups.get(key)!.push(item);
+      itemsByFolder.get(folderKey)!.push(item);
     }
 
-    // Process each file's structure
-    for (const [fileName, items] of fileGroups) {
-      // Sort items within file by line number
-      items.sort((a, b) => a.lineNumber - b.lineNumber);
+    // Sort folder paths to ensure proper nesting (parent folders before child folders)
+    const sortedFolderPaths = Array.from(itemsByFolder.keys()).sort((a, b) => {
+      if (a === '') return -1; // Root folder first
+      if (b === '') return 1;
+      return a.split('/').length - b.split('/').length; // Shallower paths first
+    });
 
-      let currentAct: StructureTreeItem | null = null;
-      let currentChapter: StructureTreeItem | null = null;
+    // Create folder structure
+    for (const folderPath of sortedFolderPaths) {
+      const items = itemsByFolder.get(folderPath)!;
 
-      for (const item of items) {
-        const treeItem = new StructureTreeItem(
-          item,
-          item.type === 'section' ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Expanded,
-        );
-
-        if (item.type === 'act') {
-          // New act - add to root and set as current
-          currentAct = treeItem;
-          currentChapter = null;
+      if (folderPath === '') {
+        // Items directly in Book/ folder
+        for (const item of items) {
+          const treeItem = new StructureTreeItem(item, this.getCollapsibleState(item));
           this.hierarchicalStructure.push(treeItem);
-        } else if (item.type === 'chapter') {
-          // New chapter
-          if (currentAct) {
-            // Add chapter under current act
-            currentAct.addChild(treeItem);
-          } else {
-            // No act, add chapter to root
-            this.hierarchicalStructure.push(treeItem);
+        }
+      } else {
+        // Items in subfolders - create folder structure
+        const folderParts = folderPath.split('/');
+        let currentParent: StructureTreeItem[] = this.hierarchicalStructure;
+        let currentPath = '';
+
+        // Create nested folder structure
+        for (const folderName of folderParts) {
+          currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+
+          let folderNode = folderMap.get(currentPath);
+          if (!folderNode) {
+            // Create folder node
+            const folderInfo: StructureInfo = {
+              title: folderName,
+              level: 0,
+              type: 'folder',
+              position: new vscode.Position(0, 0),
+              lineNumber: 0,
+              fileName: folderName,
+              filePath: '',
+              folderPath: currentPath,
+            };
+
+            folderNode = new StructureTreeItem(folderInfo, vscode.TreeItemCollapsibleState.Expanded);
+            folderNode.iconPath = new vscode.ThemeIcon('folder');
+            folderMap.set(currentPath, folderNode);
+
+            currentParent.push(folderNode);
           }
-          currentChapter = treeItem;
-        } else if (item.type === 'section') {
-          // Section
-          if (currentChapter) {
-            // Add section under current chapter
-            currentChapter.addChild(treeItem);
-          } else if (currentAct) {
-            // No chapter, add section under current act
-            currentAct.addChild(treeItem);
-          } else {
-            // No chapter or act, add section to root
-            this.hierarchicalStructure.push(treeItem);
-          }
+
+          currentParent = folderNode.children;
+        }
+
+        // Add items to the deepest folder
+        for (const item of items) {
+          const treeItem = new StructureTreeItem(item, this.getCollapsibleState(item));
+          currentParent.push(treeItem);
         }
       }
     }
+  }
+
+  private getCollapsibleState(item: StructureInfo): vscode.TreeItemCollapsibleState {
+    if (item.type === 'folder') {
+      return vscode.TreeItemCollapsibleState.Expanded;
+    }
+
+    // Check if this item has any child sections within the same file
+    const hasChildren = this.structure.some(
+      (other) => other.filePath === item.filePath && other.lineNumber > item.lineNumber && other.level > item.level,
+    );
+
+    return hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
   }
 
   private async scanForStructure(): Promise<void> {
@@ -152,9 +193,9 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     }
 
     try {
-      // Find all markdown files in the workspace, excluding character cards
-      const files = await vscode.workspace.findFiles('**/*.md', '{**/node_modules/**,**/characters/**}');
-      console.log(`Found ${files.length} markdown files (excluding character cards)`);
+      // Find all markdown files only in the Book folder
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      console.log(`Found ${files.length} markdown files in Book folder`);
 
       for (const file of files) {
         await this.scanFile(file);
@@ -179,6 +220,15 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
       const lines = document.getText().split('\n');
       const fileName = path.basename(fileUri.fsPath);
 
+      // Extract folder path relative to Book/
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) return;
+
+      const bookPath = path.join(workspaceFolder.uri.fsPath, 'Book');
+      const relativePath = path.relative(bookPath, fileUri.fsPath);
+      const folderPath = path.dirname(relativePath);
+      const normalizedFolderPath = folderPath === '.' ? '' : folderPath.replace(/\\/g, '/');
+
       lines.forEach((line, index) => {
         const position = new vscode.Position(index, 0);
 
@@ -189,7 +239,7 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
           const title = headerMatch[2].trim();
 
           // Determine type based on content and level
-          let type: 'act' | 'chapter' | 'section' = 'section';
+          let type: 'act' | 'chapter' | 'section' | 'folder' = 'section';
           const lowerTitle = title.toLowerCase();
           const lowerFileName = fileName.toLowerCase();
 
@@ -224,6 +274,7 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
             lineNumber: index + 1,
             fileName: fileName,
             filePath: fileUri.fsPath,
+            folderPath: normalizedFolderPath,
           });
         }
       });
@@ -245,8 +296,18 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     const workspaceFolder = vscode.workspace.workspaceFolders[0];
 
     try {
+      // Create Book directory if it doesn't exist
+      const bookDir = path.join(workspaceFolder.uri.fsPath, 'Book');
+      const bookDirUri = vscode.Uri.file(bookDir);
+      try {
+        await vscode.workspace.fs.stat(bookDirUri);
+      } catch {
+        await vscode.workspace.fs.createDirectory(bookDirUri);
+        console.log('Created Book directory');
+      }
+
       // Find existing chapter files to determine next chapter number
-      const files = await vscode.workspace.findFiles('**/Chapter-*.md', '**/node_modules/**');
+      const files = await vscode.workspace.findFiles('Book/Chapter-*.md', '**/node_modules/**');
       const chapterNumbers = files
         .map((file) => {
           const match = path.basename(file.fsPath).match(/Chapter-(\d+)\.md/i);
@@ -256,7 +317,7 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
 
       const nextChapterNumber = chapterNumbers.length > 0 ? Math.max(...chapterNumbers) + 1 : 1;
       const chapterFileName = `Chapter-${nextChapterNumber.toString().padStart(2, '0')}.md`;
-      const chapterPath = path.join(workspaceFolder.uri.fsPath, chapterFileName);
+      const chapterPath = path.join(bookDir, chapterFileName);
 
       // Ask user for chapter title
       const chapterTitle = await vscode.window.showInputBox({

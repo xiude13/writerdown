@@ -1,3 +1,4 @@
+# Extension Development Files
 .vscode/**
 .vscode-test/**
 src/**
@@ -5,9 +6,31 @@ src/**
 .yarnrc
 vsc-extension-quickstart.md
 **/tsconfig.json
-**/.eslintrc.json
+**/tslint.json
 **/*.map
-**/*.ts
+.git/**
+.DS_Store
+
+# Build artifacts
+out/test/**
+*.vsix
+
+# Example project files (don't include in extension package)
+example-project/**
+
+# Generated character cards (user-specific, don't include in extension package)
+.characters/**
+
+# Documentation and development files
+*.md
+!README.md
+
+# Node modules
 node_modules/**
+
+# TypeScript source files
+**/*.ts
+!**/*.d.ts
+
 npm-debug.log
 yarn-error.log 

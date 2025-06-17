@@ -13,6 +13,9 @@
       "include": "#character-notes"
     },
     {
+      "include": "#markers"
+    },
+    {
       "include": "#dialogue"
     },
     {
@@ -73,6 +76,24 @@
     "character-notes": {
       "patterns": [
         {
+          "name": "markup.character.bracketed.writerdown",
+          "match": "(@)(\\[)([^\\]]+)(\\])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.character.writerdown"
+            },
+            "2": {
+              "name": "punctuation.definition.character.writerdown"
+            },
+            "3": {
+              "name": "entity.name.character.writerdown"
+            },
+            "4": {
+              "name": "punctuation.definition.character.writerdown"
+            }
+          }
+        },
+        {
           "name": "markup.character.writerdown",
           "match": "(@)([A-Za-z0-9_]+)",
           "captures": {
@@ -81,6 +102,52 @@
             },
             "2": {
               "name": "entity.name.character.writerdown"
+            }
+          }
+        }
+      ]
+    },
+    "markers": {
+      "patterns": [
+        {
+          "name": "markup.marker.categorized.writerdown",
+          "match": "^(#!)(\\s*)(\\[)([^\\]]+)(\\])(\\s*)(.+)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.marker.writerdown"
+            },
+            "2": {
+              "name": "markup.marker.writerdown"
+            },
+            "3": {
+              "name": "punctuation.definition.category.writerdown"
+            },
+            "4": {
+              "name": "entity.name.category.writerdown"
+            },
+            "5": {
+              "name": "punctuation.definition.category.writerdown"
+            },
+            "6": {
+              "name": "markup.marker.writerdown"
+            },
+            "7": {
+              "name": "entity.name.marker.writerdown"
+            }
+          }
+        },
+        {
+          "name": "markup.marker.writerdown",
+          "match": "^(#!)(\\s*)(.+)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.marker.writerdown"
+            },
+            "2": {
+              "name": "markup.marker.writerdown"
+            },
+            "3": {
+              "name": "entity.name.marker.writerdown"
             }
           }
         }

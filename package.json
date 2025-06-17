@@ -3,6 +3,7 @@
   "displayName": "WriterDown",
   "description": "Enhanced Markdown syntax highlighting for writers",
   "version": "0.0.1",
+  "publisher": "writerdown",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -56,6 +57,13 @@
       }
     ],
     "configurationDefaults": {
+      "[writerdown]": {
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 70,
+        "editor.cursorSurroundingLines": 0,
+        "editor.tabSize": 2,
+        "editor.wrappingIndent": "same"
+      },
       "editor.tokenColorCustomizations": {
         "textMateRules": [
           {
@@ -92,6 +100,33 @@
               "foreground": "#61AFEF",
               "fontStyle": "bold"
             }
+          },
+          {
+            "scope": "punctuation.definition.marker.writerdown",
+            "settings": {
+              "foreground": "#C678DD",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "entity.name.marker.writerdown",
+            "settings": {
+              "foreground": "#56B6C2",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "scope": "entity.name.category.writerdown",
+            "settings": {
+              "foreground": "#D19A66",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "punctuation.definition.category.writerdown",
+            "settings": {
+              "foreground": "#C678DD"
+            }
           }
         ]
       }
@@ -121,6 +156,21 @@
         "command": "writerdown.goToCharacter",
         "title": "Go to Character Mention",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "writerdown.renameCharacter",
+        "title": "Rename Character",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "writerdown.changeCategory",
+        "title": "Change Category",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "writerdown.assignCategory",
+        "title": "Assign Category",
+        "icon": "$(tag)"
       },
       {
         "command": "writerdown.refreshTasks",
@@ -161,6 +211,76 @@
         "command": "writerdown.showPageCountDetails",
         "title": "Show Page Count Details",
         "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.formatNovel",
+        "title": "Format Novel (Clean Up)",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.cleanIndentation",
+        "title": "Remove Problematic Indentation",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.exportNovel",
+        "title": "Export with Novel Formatting",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.debugStructure",
+        "title": "Debug Structure Provider",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.searchStoryEvents",
+        "title": "Search Story Events",
+        "icon": "$(search)"
+      },
+      {
+        "command": "writerdown.clearStoryEventsSearch",
+        "title": "Clear Search",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "writerdown.searchCharacters",
+        "title": "Search Characters",
+        "icon": "$(search)"
+      },
+      {
+        "command": "writerdown.clearCharactersSearch",
+        "title": "Clear Search",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "writerdown.focusNextPanel",
+        "title": "Focus Next WriterDown Panel",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.focusPreviousPanel",
+        "title": "Focus Previous WriterDown Panel",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.resetPanelOrder",
+        "title": "Reset Panel Order to Default",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.refreshMarkers",
+        "title": "Refresh Story Events",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "writerdown.goToMarker",
+        "title": "Go to Event",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "writerdown.addChapterMetadata",
+        "title": "Add Chapter Metadata",
+        "category": "WriterDown"
       }
     ],
     "views": {
@@ -168,6 +288,10 @@
         {
           "id": "writerdown-structure",
           "name": "Story Structure"
+        },
+        {
+          "id": "writerdown-markers",
+          "name": "Story Events"
         },
         {
           "id": "writerdown-characters",
@@ -214,6 +338,31 @@
           "command": "writerdown.refreshTasks",
           "when": "view == writerdown-tasks",
           "group": "navigation"
+        },
+        {
+          "command": "writerdown.refreshMarkers",
+          "when": "view == writerdown-markers",
+          "group": "navigation"
+        },
+        {
+          "command": "writerdown.searchStoryEvents",
+          "when": "view == writerdown-markers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "writerdown.clearStoryEventsSearch",
+          "when": "view == writerdown-markers",
+          "group": "navigation@2"
+        },
+        {
+          "command": "writerdown.searchCharacters",
+          "when": "view == writerdown-characters",
+          "group": "navigation@1"
+        },
+        {
+          "command": "writerdown.clearCharactersSearch",
+          "when": "view == writerdown-characters",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -233,17 +382,50 @@
           "group": "inline@2"
         },
         {
+          "command": "writerdown.renameCharacter",
+          "when": "view == writerdown-characters && (viewItem == characterWithCategory || viewItem == characterWithoutCategory)",
+          "group": "context"
+        },
+        {
+          "command": "writerdown.changeCategory",
+          "when": "view == writerdown-characters && viewItem == characterWithCategory",
+          "group": "context@1"
+        },
+        {
+          "command": "writerdown.assignCategory",
+          "when": "view == writerdown-characters && viewItem == characterWithoutCategory",
+          "group": "context@1"
+        },
+        {
           "command": "writerdown.goToTask",
           "when": "view == writerdown-tasks",
           "group": "inline"
+        },
+        {
+          "command": "writerdown.goToMarker",
+          "when": "view == writerdown-markers",
+          "group": "inline"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "writerdown.focusNextPanel",
+        "key": "alt+down",
+        "when": "focusedView =~ /^writerdown-/"
+      },
+      {
+        "command": "writerdown.focusPreviousPanel",
+        "key": "alt+up",
+        "when": "focusedView =~ /^writerdown-/"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "build": "npm run compile && rm writerdown-0.0.1.vsix && npx vsce package",
     "test": "npm run compile && echo 'Tests are integrated into VS Code extension. Use \"WriterDown: Run Tests\" command in VS Code.'"
   },
   "devDependencies": {
