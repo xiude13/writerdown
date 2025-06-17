@@ -228,6 +228,26 @@
         "category": "WriterDown"
       },
       {
+        "command": "writerdown.cleanMarkup",
+        "title": "Clean WriterDown Markup (Preview)",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.exportCleanMarkdown",
+        "title": "Export Clean Markdown File",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.exportChapterClean",
+        "title": "Export All Chapters (Clean)",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.exportAllFormats",
+        "title": "Export to All Formats (Markdown, HTML, PDF)",
+        "category": "WriterDown"
+      },
+      {
         "command": "writerdown.debugStructure",
         "title": "Debug Structure Provider",
         "category": "WriterDown"
@@ -429,13 +449,16 @@
     "test": "npm run compile && echo 'Tests are integrated into VS Code extension. Use \"WriterDown: Run Tests\" command in VS Code.'"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
-    "@types/node": "16.x",
-    "@types/mocha": "^10.0.1",
     "@types/glob": "^8.1.0",
+    "@types/html-pdf": "^3.0.3",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
     "@vscode/test-electron": "^2.3.0",
-    "typescript": "^4.9.4",
+    "glob": "^8.1.0",
+    "html-pdf": "^3.0.1",
     "mocha": "^10.2.0",
-    "glob": "^8.1.0"
+    "puppeteer": "^24.10.1",
+    "typescript": "^4.9.4"
   }
 }

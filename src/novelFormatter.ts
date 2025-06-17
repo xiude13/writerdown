@@ -7,6 +7,7 @@ export interface NovelFormattingOptions {
   paragraphSpacing: 'single' | 'double';
   removeTrailingSpaces: boolean;
   standardizeQuotes: boolean;
+  removeWriterDownMarkup: boolean;
 }
 
 export class NovelFormatter {
@@ -17,7 +18,40 @@ export class NovelFormatter {
     paragraphSpacing: 'single',
     removeTrailingSpaces: true,
     standardizeQuotes: true,
+    removeWriterDownMarkup: true,
   };
+
+  /**
+   * Clean WriterDown markup from text for export
+   */
+  public static cleanWriterDownMarkup(text: string): string {
+    let cleaned = text;
+
+    // Remove YAML frontmatter
+    cleaned = cleaned.replace(/^---\n[\s\S]*?\n---\n?/m, '');
+
+    // Remove character mentions (@Character and @[Multi Word])
+    cleaned = cleaned.replace(/@\[([^\]]+)\]/g, '$1'); // @[Multi Word] -> Multi Word
+    cleaned = cleaned.replace(/@(\w+)/g, '$1'); // @Character -> Character
+
+    // Remove story event markers (#! and #! [CATEGORY])
+    cleaned = cleaned.replace(/^#!\s*(\[[\w\s]+\])?\s*/gm, ''); // Remove #! and #! [CATEGORY] prefixes
+
+    // Remove writer annotations
+    cleaned = cleaned.replace(/\{\{[^}]*\}\}/g, ''); // Remove {{TODO}}, {{RESEARCH}}, {{EDIT}} notes
+    cleaned = cleaned.replace(/\[\[([^\]]*)\]\]/g, ''); // Remove [[writer notes]]
+
+    // Remove scene markers
+    cleaned = cleaned.replace(/^\*\*_\s*SCENE\s+\d+:.*?_\*\*$/gm, ''); // Remove **_ SCENE 1: Title _**
+    cleaned = cleaned.replace(/^\[PLOT:.*?\]$/gm, ''); // Remove [PLOT: description]
+
+    // Clean up extra whitespace that might be left
+    cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n'); // Multiple empty lines -> double line break
+    cleaned = cleaned.replace(/^\s+$/gm, ''); // Remove lines with only whitespace
+    cleaned = cleaned.trim(); // Remove leading/trailing whitespace
+
+    return cleaned;
+  }
 
   /**
    * Format document for novel writing standards
@@ -27,9 +61,14 @@ export class NovelFormatter {
     options?: Partial<NovelFormattingOptions>,
   ): Promise<string> {
     const config = { ...this.DEFAULT_OPTIONS, ...options };
-    const text = document.getText();
-    const lines = text.split('\n');
+    let text = document.getText();
 
+    // Clean WriterDown markup if requested
+    if (config.removeWriterDownMarkup) {
+      text = this.cleanWriterDownMarkup(text);
+    }
+
+    const lines = text.split('\n');
     const formattedLines: string[] = [];
     let inCodeBlock = false;
     let inBlockQuote = false;
@@ -213,7 +252,10 @@ export class NovelFormatter {
    * Prepare text for export with proper novel formatting
    */
   public static prepareForExport(text: string, format: 'docx' | 'pdf' | 'html' = 'docx'): string {
-    const lines = text.split('\n');
+    // First clean all WriterDown markup
+    let cleanedText = this.cleanWriterDownMarkup(text);
+
+    const lines = cleanedText.split('\n');
     const exportLines: string[] = [];
 
     for (const line of lines) {

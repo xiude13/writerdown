@@ -544,6 +544,168 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const cleanMarkupCommand = vscode.commands.registerCommand('writerdown.cleanMarkup', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !editor.document.fileName.endsWith('.md')) {
+      vscode.window.showErrorMessage('Please open a markdown file to clean markup');
+      return;
+    }
+
+    try {
+      const originalText = editor.document.getText();
+      const cleanedText = NovelFormatter.cleanWriterDownMarkup(originalText);
+
+      // Show preview of cleaned content in a new untitled document
+      const doc = await vscode.workspace.openTextDocument({
+        content: cleanedText,
+        language: 'markdown',
+      });
+
+      await vscode.window.showTextDocument(doc);
+      vscode.window.showInformationMessage(
+        'WriterDown markup cleaned. This is a preview - your original file is unchanged.',
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error cleaning markup: ${error}`);
+    }
+  });
+
+  const exportCleanMarkdownCommand = vscode.commands.registerCommand('writerdown.exportCleanMarkdown', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !editor.document.fileName.endsWith('.md')) {
+      vscode.window.showErrorMessage('Please open a markdown file to export');
+      return;
+    }
+
+    try {
+      const originalText = editor.document.getText();
+      const cleanedText = NovelFormatter.cleanWriterDownMarkup(originalText);
+
+      // Create output directory
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
+      }
+
+      const fs = require('fs');
+      const path = require('path');
+      const outputDir = path.join(workspaceFolder.uri.fsPath, 'output');
+
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      // Generate output filename
+      const originalFileName = path.basename(editor.document.fileName, '.md');
+      const outputPath = path.join(outputDir, `${originalFileName}-clean.md`);
+
+      // Write cleaned file
+      fs.writeFileSync(outputPath, cleanedText, 'utf-8');
+
+      vscode.window.showInformationMessage(`Clean markdown exported to: output/${originalFileName}-clean.md`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error exporting clean markdown: ${error}`);
+    }
+  });
+
+  const exportChapterCleanCommand = vscode.commands.registerCommand('writerdown.exportChapterClean', async () => {
+    if (!vscode.workspace.workspaceFolders) {
+      vscode.window.showErrorMessage('No workspace folder found');
+      return;
+    }
+
+    try {
+      // Find all chapter files
+      const files = await vscode.workspace.findFiles('**/*.md', '**/node_modules/**');
+      const chapterFiles = files.filter(
+        (file) =>
+          file.fsPath.includes('Book/') ||
+          file.fsPath.includes('Chapter') ||
+          file.path.toLowerCase().includes('chapter'),
+      );
+
+      if (chapterFiles.length === 0) {
+        vscode.window.showWarningMessage(
+          'No chapter files found. Looking for files in Book/ folder or containing "Chapter".',
+        );
+        return;
+      }
+
+      const fs = require('fs');
+      const path = require('path');
+      const outputDir = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'output', 'chapters');
+
+      // Create output directory
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      let processedCount = 0;
+
+      for (const file of chapterFiles) {
+        const content = fs.readFileSync(file.fsPath, 'utf-8');
+        const cleanedContent = NovelFormatter.cleanWriterDownMarkup(content);
+
+        const fileName = path.basename(file.fsPath, '.md') + '-clean.md';
+        const outputPath = path.join(outputDir, fileName);
+
+        fs.writeFileSync(outputPath, cleanedContent, 'utf-8');
+        processedCount++;
+      }
+
+      vscode.window.showInformationMessage(`Exported ${processedCount} clean chapter files to: output/chapters/`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error exporting chapters: ${error}`);
+    }
+  });
+
+  const exportAllFormatsCommand = vscode.commands.registerCommand('writerdown.exportAllFormats', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !editor.document.fileName.endsWith('.md')) {
+      vscode.window.showErrorMessage('Please open a markdown file to export');
+      return;
+    }
+
+    try {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
+      }
+
+      // Show progress
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Exporting to all formats...',
+          cancellable: false,
+        },
+        async (progress) => {
+          const formats: ('docx' | 'html' | 'pdf')[] = ['docx', 'html', 'pdf'];
+          const total = formats.length;
+
+          for (let i = 0; i < formats.length; i++) {
+            const format = formats[i];
+            progress.report({
+              increment: 100 / total,
+              message: `Exporting ${format.toUpperCase()}...`,
+            });
+
+            await exportNovel({
+              input: editor.document.fileName,
+              format: format,
+            });
+          }
+        },
+      );
+
+      vscode.window.showInformationMessage('Novel exported to all formats successfully! Check the output/ folder.');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error exporting to all formats: ${error}`);
+    }
+  });
+
   const debugStructureCommand = vscode.commands.registerCommand('writerdown.debugStructure', async () => {
     console.log('=== DEBUG STRUCTURE PROVIDER ===');
 
@@ -614,6 +776,10 @@ export function activate(context: vscode.ExtensionContext) {
     formatNovelCommand,
     cleanIndentationCommand,
     exportNovelCommand,
+    cleanMarkupCommand,
+    exportCleanMarkdownCommand,
+    exportChapterCleanCommand,
+    exportAllFormatsCommand,
     debugStructureCommand,
   );
 
