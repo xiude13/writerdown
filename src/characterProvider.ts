@@ -303,9 +303,9 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
     }
 
     try {
-      // Find all markdown files in the workspace, excluding character cards
-      const files = await vscode.workspace.findFiles('**/*.md', '{**/node_modules/**,**/characters/**}');
-      console.log(`Found ${files.length} markdown files for character scanning (excluding character cards)`);
+      // Find markdown files only in the Book folder, excluding character cards
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      console.log(`Found ${files.length} markdown files in Book/ folder for character scanning`);
 
       for (const file of files) {
         await this.scanFile(file);
