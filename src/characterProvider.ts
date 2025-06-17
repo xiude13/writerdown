@@ -303,15 +303,30 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
     }
 
     try {
-      // Find markdown files only in the Book folder, excluding character cards
-      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      // Find markdown files in the Book folder only for character tracking
+      // This focuses the character panel on story content
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '{**/node_modules/**,**/characters/**}');
       console.log(`Found ${files.length} markdown files in Book/ folder for character scanning`);
 
-      for (const file of files) {
-        await this.scanFile(file);
+      // If no Book folder exists, fall back to scanning common chapter patterns
+      if (files.length === 0) {
+        console.log('No Book/ folder found, scanning for Chapter files...');
+        const chapterFiles = await vscode.workspace.findFiles(
+          '**/{Chapter,chapter}*.md',
+          '{**/node_modules/**,**/characters/**}',
+        );
+        console.log(`Found ${chapterFiles.length} chapter files for character scanning`);
+
+        for (const file of chapterFiles) {
+          await this.scanFile(file);
+        }
+      } else {
+        for (const file of files) {
+          await this.scanFile(file);
+        }
       }
 
-      console.log(`Found ${this.characters.size} unique characters`);
+      console.log(`Found ${this.characters.size} unique characters in story content`);
 
       // Create character cards after scanning
       await this.createCharacterCards();

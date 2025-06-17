@@ -30,6 +30,10 @@ Transform VS Code into a professional writing environment for novelists and stor
 @[Lord Halven] greeted @[Lady Catherine] at the door.
 ```
 
+- **Smart Tracking**: Automatically detects characters in `Book/` folder (focused on story content)
+- **Global Renaming**: Character rename operations work across all markdown files
+- **Bracket Support**: Use `@[Character Name]` for multi-word character names
+
 ### Story Events
 
 ```markdown
@@ -52,7 +56,7 @@ Access via the **📚 WriterDown** activity bar icon:
 
 - **📖 Story Structure** - Chapter navigation with metadata
 - **🎯 Story Events** - Categorized story moments
-- **👥 Characters** - Auto-generated character cards
+- **👥 Characters** - Auto-generated character cards (tracks `Book/` folder)
 - **✅ Writer Tasks** - TODO/RESEARCH/EDIT tracking
 
 ## 📊 Status Bar
