@@ -10,13 +10,13 @@ status: draft
 
 #! [EVENT] The Forest
 
-@Elene entered the **Whispering Woods** just as the first stars appeared. [[The woods are alive with ancient magic]]
+@Elene entered the **Whispering Woods** just as the first stars appeared. {NOTE: The woods are alive with ancient magic}
 
 She thought of @[Marcus The Knight], wondering "if he had walked this same path". @Garry's warnings echoed in her mind.
 
-{{EDIT: This description feels too generic. Make it more unique and atmospheric.}}
+{EDIT: This description feels too generic. Make it more unique and atmospheric.}
 
-[PLOT: The woods test travelers - only those with pure intentions can pass through safely]
+#! [PLOT] The woods test travelers - only those with pure intentions can pass through safely
 
 #! [ACTION] The Battle
 
@@ -26,7 +26,7 @@ A figure emerged from the shadows. @Elene raised her dagger, but the stranger ra
 
 "Peace, @Elene. I am @Thane, guardian of these woods. Your brother @[Marcus The Knight]... he passed this way."
 
-@Thane's eyes glowed with an otherworldly light. [[He's not entirely human]]
+@Thane's eyes glowed with an otherworldly light. {NOTE: He's not entirely human}
 
 "@[Marcus The Knight] seeks the _Heart of the Forest_," @Thane continued. "But the price... @Elene, you must understand the price."
 
@@ -34,4 +34,4 @@ A figure emerged from the shadows. @Elene raised her dagger, but the stranger ra
 
 #! [EVENT] The Schools
 
-{{TODO: Develop @Thane's character - ally or antagonist?}}
+{TODO: Develop @Thane's character - ally or antagonist?}

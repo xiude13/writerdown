@@ -11,20 +11,27 @@ export interface StructureInfo {
   filePath: string;
   folderPath?: string; // Relative path from Book/ (e.g., "Part1", "Part2/Chapter1")
   wordCount?: number; // Word count for this section
+  chapterNumber?: string; // Chapter number from metadata (e.g., "5.1", "5.3.2")
 }
 
 export class StructureTreeItem extends vscode.TreeItem {
   public children: StructureTreeItem[] = [];
 
   constructor(public readonly structureInfo: StructureInfo, collapsibleState: vscode.TreeItemCollapsibleState) {
-    super(structureInfo.title, collapsibleState);
+    // Format title with chapter number if available
+    let displayTitle = structureInfo.title;
+    if (structureInfo.chapterNumber && structureInfo.type === 'chapter') {
+      displayTitle = `${structureInfo.chapterNumber} - ${structureInfo.title}`;
+    }
+
+    super(displayTitle, collapsibleState);
 
     const fileName = path.basename(structureInfo.fileName, '.md');
-    this.tooltip = `${structureInfo.type.toUpperCase()}: ${structureInfo.title} (${fileName})`;
+    this.tooltip = `${structureInfo.type.toUpperCase()}: ${displayTitle} (${fileName})`;
     this.contextValue = structureInfo.type;
 
-    // Show word count for each section
-    this.description = this.getWordCountDescription(structureInfo);
+    // Show only word count in description (no chapter number since it's in title)
+    this.description = this.getDescription(structureInfo);
 
     // Different icons for different structure levels
     switch (structureInfo.type) {
@@ -53,13 +60,9 @@ export class StructureTreeItem extends vscode.TreeItem {
     this.children.push(child);
   }
 
-  private getWordCountDescription(structureInfo: StructureInfo): string {
-    // Don't show word counts for events
-    if (structureInfo.type === 'event') {
-      return '';
-    }
-
-    if (structureInfo.wordCount !== undefined) {
+  private getDescription(structureInfo: StructureInfo): string {
+    // Only show word count (chapter number is now in the title)
+    if (structureInfo.type !== 'event' && structureInfo.wordCount !== undefined) {
       return `${structureInfo.wordCount} words`;
     }
     return '';
@@ -98,6 +101,32 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
       console.log(
         `StructureProvider: getChildren called for root, returning ${this.hierarchicalStructure.length} items`,
       );
+
+      // Add project totals as the first item
+      const totals = this.getProjectTotals();
+      if (totals.totalWords > 0) {
+        const totalsItem = new StructureTreeItem(
+          {
+            title: `Project: ${totals.totalWords.toLocaleString()} words • ${totals.totalPages} pages • ${
+              totals.chapterCount
+            } chapters`,
+            level: 0,
+            type: 'folder',
+            position: new vscode.Position(0, 0),
+            lineNumber: 0,
+            fileName: 'Project Totals',
+            filePath: '',
+            folderPath: '',
+          },
+          vscode.TreeItemCollapsibleState.None,
+        );
+        totalsItem.iconPath = new vscode.ThemeIcon('graph');
+        totalsItem.contextValue = 'projectTotals';
+        totalsItem.command = undefined; // No command for totals item
+
+        return Promise.resolve([totalsItem, ...this.hierarchicalStructure]);
+      }
+
       return Promise.resolve(this.hierarchicalStructure);
     }
     console.log(
@@ -177,6 +206,23 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     }
   }
 
+  private sortChapterNumbers(a: string, b: string): number {
+    // Split by dots and convert to numbers for proper sorting
+    const aParts = a.split('.').map((part) => parseInt(part, 10));
+    const bParts = b.split('.').map((part) => parseInt(part, 10));
+
+    // Compare each part
+    const maxLength = Math.max(aParts.length, bParts.length);
+    for (let i = 0; i < maxLength; i++) {
+      const aPart = aParts[i] || 0;
+      const bPart = bParts[i] || 0;
+      if (aPart !== bPart) {
+        return aPart - bPart;
+      }
+    }
+    return 0;
+  }
+
   private buildFileHierarchy(items: StructureInfo[], parentArray: StructureTreeItem[]): void {
     // Group items by file for proper hierarchy building
     const itemsByFile = new Map<string, StructureInfo[]>();
@@ -227,6 +273,25 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
         }
       }
     }
+
+    // Sort the final array by chapter number if available, then by title
+    parentArray.sort((a, b) => {
+      // If both have chapter numbers, sort by them
+      if (a.structureInfo.chapterNumber && b.structureInfo.chapterNumber) {
+        return this.sortChapterNumbers(a.structureInfo.chapterNumber, b.structureInfo.chapterNumber);
+      }
+
+      // If only one has a chapter number, prioritize it
+      if (a.structureInfo.chapterNumber && !b.structureInfo.chapterNumber) {
+        return -1;
+      }
+      if (!a.structureInfo.chapterNumber && b.structureInfo.chapterNumber) {
+        return 1;
+      }
+
+      // Otherwise sort by title
+      return a.structureInfo.title.localeCompare(b.structureInfo.title);
+    });
   }
 
   private getCollapsibleState(item: StructureInfo): vscode.TreeItemCollapsibleState {
@@ -353,20 +418,13 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
           if (level === 1) {
             if (lowerTitle.includes('act') || lowerTitle.includes('part')) {
               type = 'act';
-            } else if (lowerTitle.includes('chapter') || isChapterFile) {
+            } else if (lowerTitle.includes('chapter') || isChapterFile || metadata.chapter) {
               type = 'chapter';
-              // Format chapter title using metadata if available
-              if (metadata.chapter && lowerTitle.includes('chapter')) {
+              // Use metadata title if available, otherwise format from header
+              if (metadata.title) {
+                title = metadata.title;
+              } else if (metadata.chapter && lowerTitle.includes('chapter')) {
                 // Extract just the chapter name part (after "Chapter X:")
-                const chapterNameMatch = title.match(/^Chapter\s+\d+:\s*(.+)$/i);
-                if (chapterNameMatch) {
-                  title = `${metadata.chapter}: ${chapterNameMatch[1]}`;
-                }
-              }
-            } else if (isChapterFile) {
-              type = 'chapter';
-              // Format chapter title using metadata if available
-              if (metadata.chapter && lowerTitle.includes('chapter')) {
                 const chapterNameMatch = title.match(/^Chapter\s+\d+:\s*(.+)$/i);
                 if (chapterNameMatch) {
                   title = `${metadata.chapter}: ${chapterNameMatch[1]}`;
@@ -376,10 +434,12 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
               type = 'act'; // Top level defaults to act
             }
           } else if (level === 2) {
-            if (lowerTitle.includes('chapter') || isChapterFile) {
+            if (lowerTitle.includes('chapter') || isChapterFile || metadata.chapter) {
               type = 'chapter';
-              // Format chapter title using metadata if available
-              if (metadata.chapter && lowerTitle.includes('chapter')) {
+              // Use metadata title if available, otherwise format from header
+              if (metadata.title) {
+                title = metadata.title;
+              } else if (metadata.chapter && lowerTitle.includes('chapter')) {
                 const chapterNameMatch = title.match(/^Chapter\s+\d+:\s*(.+)$/i);
                 if (chapterNameMatch) {
                   title = `${metadata.chapter}: ${chapterNameMatch[1]}`;
@@ -401,6 +461,7 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
             fileName: fileName,
             filePath: fileUri.fsPath,
             folderPath: normalizedFolderPath,
+            chapterNumber: type === 'chapter' ? metadata.chapter : undefined,
           });
         } else if (eventMatch) {
           // Handle event markers
@@ -494,18 +555,18 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     return words;
   }
 
-  private extractMetadata(text: string): { chapter?: number; title?: string; status?: string } {
-    const metadata: { chapter?: number; title?: string; status?: string } = {};
+  private extractMetadata(text: string): { chapter?: string; title?: string; status?: string } {
+    const metadata: { chapter?: string; title?: string; status?: string } = {};
 
     // Check if the file starts with YAML frontmatter
     const yamlMatch = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
     if (yamlMatch) {
       const yamlContent = yamlMatch[1];
 
-      // Extract chapter number
-      const chapterMatch = yamlContent.match(/^chapter:\s*(\d+)\s*$/m);
+      // Extract chapter number (can be decimal like 5.1, 5.3.2)
+      const chapterMatch = yamlContent.match(/^chapter:\s*([\d.]+)\s*$/m);
       if (chapterMatch) {
-        metadata.chapter = parseInt(chapterMatch[1]);
+        metadata.chapter = chapterMatch[1];
       }
 
       // Extract title
@@ -528,6 +589,34 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     return this.structure;
   }
 
+  getProjectTotals(): { totalWords: number; totalPages: number; chapterCount: number } {
+    let totalWords = 0;
+    let chapterCount = 0;
+
+    // Sum up word counts from all structure items
+    for (const item of this.structure) {
+      if (item.wordCount && item.wordCount > 0) {
+        totalWords += item.wordCount;
+      }
+      if (item.type === 'chapter') {
+        chapterCount++;
+      }
+    }
+
+    // Get configurable words per page setting
+    const config = vscode.workspace.getConfiguration('writerdown');
+    const wordsPerPage = config.get<number>('wordsPerPage', 250);
+
+    // Calculate page estimation
+    const totalPages = Math.ceil(totalWords / wordsPerPage);
+
+    return {
+      totalWords,
+      totalPages,
+      chapterCount,
+    };
+  }
+
   async createNewChapter(): Promise<void> {
     if (!vscode.workspace.workspaceFolders) {
       vscode.window.showErrorMessage('No workspace folder open');
@@ -548,31 +637,56 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
       }
 
       // Find existing chapter files to determine next chapter number
-      const files = await vscode.workspace.findFiles('Book/Chapter-*.md', '**/node_modules/**');
-      const chapterNumbers = files
-        .map((file) => {
-          const match = path.basename(file.fsPath).match(/Chapter-(\d+)\.md/i);
-          return match ? parseInt(match[1]) : 0;
-        })
-        .filter((num) => num > 0);
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      const chapterNumbers: string[] = [];
 
-      const nextChapterNumber = chapterNumbers.length > 0 ? Math.max(...chapterNumbers) + 1 : 1;
-      const chapterFileName = `Chapter-${nextChapterNumber.toString().padStart(2, '0')}.md`;
-      const chapterPath = path.join(bookDir, chapterFileName);
+      for (const file of files) {
+        try {
+          const document = await vscode.workspace.openTextDocument(file);
+          const metadata = this.extractMetadata(document.getText());
+          if (metadata.chapter) {
+            chapterNumbers.push(metadata.chapter);
+          }
+        } catch (error) {
+          console.error('Error reading file metadata:', file.fsPath, error);
+        }
+      }
+
+      // Ask user for chapter number
+      const chapterNumber = await vscode.window.showInputBox({
+        prompt: 'Enter chapter number (e.g., 1, 5.1, 5.3.2)',
+        placeHolder: '1',
+        value: '1',
+      });
+
+      if (!chapterNumber) {
+        return;
+      }
 
       // Ask user for chapter title
       const chapterTitle = await vscode.window.showInputBox({
         prompt: 'Enter chapter title',
-        placeHolder: `Chapter ${nextChapterNumber}`,
-        value: `Chapter ${nextChapterNumber}`,
+        placeHolder: `Chapter ${chapterNumber}`,
+        value: `Chapter ${chapterNumber}`,
       });
 
       if (!chapterTitle) {
         return;
       }
 
+      // Create filename based on chapter number
+      const safeChapterNumber = chapterNumber.replace(/[^a-zA-Z0-9.-]/g, '-');
+      const chapterFileName = `Chapter-${safeChapterNumber}.md`;
+      const chapterPath = path.join(bookDir, chapterFileName);
+
       // Create chapter content
-      const chapterContent = `# ${chapterTitle}
+      const chapterContent = `---
+chapter: ${chapterNumber}
+title: '${chapterTitle}'
+status: draft
+---
+
+# ${chapterTitle}
 
 {{TODO: Start writing this chapter}}
 

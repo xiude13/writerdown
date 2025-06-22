@@ -13,6 +13,7 @@
   },
   "categories": [
     "Programming Languages",
+    "Formatters",
     "Other"
   ],
   "keywords": [
@@ -445,7 +446,19 @@
         "key": "alt+up",
         "when": "focusedView =~ /^writerdown-/"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "WriterDown",
+      "properties": {
+        "writerdown.wordsPerPage": {
+          "type": "number",
+          "default": 250,
+          "minimum": 100,
+          "maximum": 500,
+          "description": "Number of words per page for page count estimation. Standard formats: 250 (manuscript), 300 (paperback), 400 (academic)."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

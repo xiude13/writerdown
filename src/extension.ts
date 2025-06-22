@@ -35,6 +35,12 @@ export function activate(context: vscode.ExtensionContext) {
   pageCountStatusBarItem.tooltip = 'WriterDown Page Estimation - Click for details';
   context.subscriptions.push(pageCountStatusBarItem);
 
+  // Create project totals status bar item
+  const projectTotalsStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 8);
+  projectTotalsStatusBarItem.command = 'writerdown.showProjectTotals';
+  projectTotalsStatusBarItem.tooltip = 'WriterDown Project Totals - Click for details';
+  context.subscriptions.push(projectTotalsStatusBarItem);
+
   // Word counting utilities
   const countWords = (text: string): { words: number; characters: number; charactersNoSpaces: number } => {
     // Remove WriterDown-specific syntax for counting
@@ -101,8 +107,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     const { words, characters, charactersNoSpaces } = countWords(activeEditor.document.getText());
 
-    // Calculate page estimation (250 words per page is standard for printed books)
-    const wordsPerPage = 250;
+    // Get configurable words per page setting
+    const config = vscode.workspace.getConfiguration('writerdown');
+    const wordsPerPage = config.get<number>('wordsPerPage', 250);
+
+    // Calculate page estimation
     const estimatedPages = Math.ceil(words / wordsPerPage);
     const exactPages = (words / wordsPerPage).toFixed(1);
 
@@ -129,6 +138,36 @@ export function activate(context: vscode.ExtensionContext) {
       wordsPerPage,
       fileName: activeEditor.document.fileName.split('/').pop() || 'Unknown',
     };
+  };
+
+  const updateProjectTotals = async () => {
+    // Only show project totals if we're in a WriterDown workspace
+    if (!vscode.workspace.workspaceFolders) {
+      projectTotalsStatusBarItem.hide();
+      return;
+    }
+
+    try {
+      // Check if we have a Book folder (indicates WriterDown project)
+      const bookFiles = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+      if (bookFiles.length === 0) {
+        projectTotalsStatusBarItem.hide();
+        return;
+      }
+
+      // Get project totals from structure provider
+      const totals = structureProvider.getProjectTotals();
+
+      // Show project totals in status bar
+      projectTotalsStatusBarItem.text = `📖 ${totals.totalWords.toLocaleString()} words • ${totals.totalPages} pages`;
+      projectTotalsStatusBarItem.show();
+
+      // Store the data for the detail command
+      (projectTotalsStatusBarItem as any).projectTotalsData = totals;
+    } catch (error) {
+      console.error('Error updating project totals:', error);
+      projectTotalsStatusBarItem.hide();
+    }
   };
 
   // Register tree views
@@ -180,6 +219,10 @@ export function activate(context: vscode.ExtensionContext) {
         todoProvider.refresh(),
         markerProvider.refresh(),
       ]);
+
+      // Update project totals after structure refresh
+      await updateProjectTotals();
+
       console.log('All providers refreshed successfully');
     } catch (error) {
       console.error('Error refreshing providers:', error);
@@ -469,7 +512,25 @@ export function activate(context: vscode.ExtensionContext) {
           `Words: ${data.words}\n` +
           `Estimated pages: ${data.estimatedPages} (rounded up)\n` +
           `Exact pages: ${data.exactPages}\n` +
-          `Based on ${data.wordsPerPage} words per page (standard book format)`,
+          `Based on ${data.wordsPerPage} words per page (configurable in settings)`,
+        { modal: false },
+      );
+    }
+  });
+
+  // Register command to show project totals details
+  const showProjectTotalsCommand = vscode.commands.registerCommand('writerdown.showProjectTotals', () => {
+    const data = (projectTotalsStatusBarItem as any).projectTotalsData;
+    if (data) {
+      const config = vscode.workspace.getConfiguration('writerdown');
+      const wordsPerPage = config.get<number>('wordsPerPage', 250);
+
+      vscode.window.showInformationMessage(
+        `WriterDown Project Totals:\n` +
+          `Total Words: ${data.totalWords.toLocaleString()}\n` +
+          `Total Pages: ${data.totalPages} (estimated)\n` +
+          `Chapters: ${data.chapterCount}\n` +
+          `Based on ${wordsPerPage} words per page (configurable in settings)`,
         { modal: false },
       );
     }
@@ -778,6 +839,7 @@ export function activate(context: vscode.ExtensionContext) {
     refreshAllCommand,
     showWordCountDetailsCommand,
     showPageCountDetailsCommand,
+    showProjectTotalsCommand,
     structureTreeView,
     characterTreeView,
     todoTreeView,
@@ -875,26 +937,64 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(completionProviderDisposable);
 
-  // Update word count on editor change and document change
+  // Update word count on file change
   const updateWordCountOnChange = () => {
-    updateWordCount();
-  };
-
-  // Initial word count update
-  updateWordCount();
-
-  // Update word count when active editor changes
-  const onDidChangeActiveTextEditorForWordCount = vscode.window.onDidChangeActiveTextEditor(updateWordCountOnChange);
-
-  // Update word count when document content changes
-  const onDidChangeTextDocumentForWordCount = vscode.workspace.onDidChangeTextDocument((event) => {
     const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor && event.document === activeEditor.document) {
+    if (activeEditor) {
       updateWordCount();
     }
-  });
+  };
 
-  context.subscriptions.push(onDidChangeActiveTextEditorForWordCount, onDidChangeTextDocumentForWordCount);
+  // Update project totals on file change
+  const updateProjectTotalsOnChange = async () => {
+    // Refresh structure provider to get latest word counts
+    await structureProvider.refresh();
+    await updateProjectTotals();
+  };
+
+  // Listen for active editor changes
+  vscode.window.onDidChangeActiveTextEditor(updateWordCountOnChange, null, context.subscriptions);
+
+  // Listen for text document changes to update word count
+  vscode.workspace.onDidChangeTextDocument(
+    (event) => {
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor && event.document === activeEditor.document) {
+        updateWordCount();
+      }
+    },
+    null,
+    context.subscriptions,
+  );
+
+  // Listen for text document saves to update project totals
+  vscode.workspace.onDidSaveTextDocument(
+    async (document) => {
+      // Only update if it's a markdown file in the Book folder
+      if (document.fileName.endsWith('.md') && document.fileName.includes('Book')) {
+        await updateProjectTotalsOnChange();
+      }
+    },
+    null,
+    context.subscriptions,
+  );
+
+  // Listen for configuration changes to update page counts
+  vscode.workspace.onDidChangeConfiguration(
+    (event) => {
+      if (event.affectsConfiguration('writerdown.wordsPerPage')) {
+        // Update both individual file and project totals
+        updateWordCount();
+        updateProjectTotals();
+      }
+    },
+    null,
+    context.subscriptions,
+  );
+
+  // Initialize word count and project totals
+  updateWordCount();
+  updateProjectTotals();
 }
 
 export function deactivate() {
