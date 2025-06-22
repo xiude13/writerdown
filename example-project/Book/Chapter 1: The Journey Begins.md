@@ -10,6 +10,8 @@ status: draft
 
 The wind carried whispers of ancient magic. {{TODO: Add more sensory details about the magical atmosphere}}
 
+#! [EVENT] Intro
+
 > "I will find you, @[Marcus The Knight]," she whispered to herself. {{EDIT: Make this more emotional and impactful}}
 
 **_ SCENE 2: The Village _**
@@ -33,5 +35,3 @@ The old man @Garry at the tavern had **weathered hands** and _knowing eyes_. [[T
 Conversations drifted through the haze—fragments of boasting, negotiations for flesh, the nervous laughter of the young @[Lord Halven].
 
 {{TODO: Add interaction between @Elene and @Garry}}
-
-[PLOT: The artifact @Elene carries is connected to @[Marcus The Knight]'s disappearance]

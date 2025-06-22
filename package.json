@@ -127,6 +127,12 @@
             "settings": {
               "foreground": "#C678DD"
             }
+          },
+          {
+            "scope": "markup.highlight.parentheses.writerdown",
+            "settings": {
+              "foreground": "#C678DD"
+            }
           }
         ]
       }
@@ -254,7 +260,7 @@
       },
       {
         "command": "writerdown.searchStoryEvents",
-        "title": "Search Story Events",
+        "title": "Search Story Markers",
         "icon": "$(search)"
       },
       {
@@ -289,12 +295,12 @@
       },
       {
         "command": "writerdown.refreshMarkers",
-        "title": "Refresh Story Events",
+        "title": "Refresh Story Markers",
         "icon": "$(refresh)"
       },
       {
         "command": "writerdown.goToMarker",
-        "title": "Go to Event",
+        "title": "Go to Marker",
         "icon": "$(go-to-file)"
       },
       {
@@ -311,7 +317,7 @@
         },
         {
           "id": "writerdown-markers",
-          "name": "Story Events"
+          "name": "Story Markers"
         },
         {
           "id": "writerdown-characters",

@@ -104,7 +104,7 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
   searchMarkers(): void {
     vscode.window
       .showInputBox({
-        prompt: 'Search Story Events',
+        prompt: 'Search Story Markers',
         placeHolder: 'Enter search terms...',
         value: this.searchFilter,
       })
@@ -203,6 +203,11 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
         const markerText = match[2].trim();
         const position = document.positionAt(match.index);
 
+        // Skip EVENT markers since they're now handled by the Story Structure panel
+        if (category && category.toLowerCase() === 'event') {
+          continue;
+        }
+
         const markerInfo: MarkerInfo = {
           text: markerText,
           category: category,
@@ -281,14 +286,14 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
         if (this.searchFilter && !this.markerMatchesSearch(marker)) {
           continue;
         }
-        categories.add(marker.category || 'Events');
+        categories.add(marker.category || 'Notes');
       }
     }
 
-    // Sort categories alphabetically, but put "Events" (uncategorized) first
+    // Sort categories alphabetically, but put "Notes" (uncategorized) first
     const sortedCategories = Array.from(categories).sort((a, b) => {
-      if (a === 'Events') return -1;
-      if (b === 'Events') return 1;
+      if (a === 'Notes') return -1;
+      if (b === 'Notes') return 1;
       return a.localeCompare(b);
     });
 
@@ -324,7 +329,7 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
 
       // Filter markers for this category and search filter
       const categoryMarkers = markersInFile.filter((marker) => {
-        const markerCategory = marker.category || 'Events';
+        const markerCategory = marker.category || 'Notes';
         return markerCategory === categoryName && this.markerMatchesSearch(marker);
       });
 
@@ -383,7 +388,7 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
   private async getMarkersInChapter(chapterItem: MarkerTreeItem): Promise<MarkerTreeItem[]> {
     const chapterMetadata = chapterItem.markerInfo.chapterMetadata;
     // Extract original category name (remove " (filtered)" suffix if present)
-    const categoryName = (chapterItem.parent?.markerInfo.text || 'Events').replace(' (filtered)', '');
+    const categoryName = (chapterItem.parent?.markerInfo.text || 'Notes').replace(' (filtered)', '');
     const result: MarkerInfo[] = [];
 
     // Collect markers for this chapter and category from all files
@@ -392,7 +397,7 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
 
       // Filter markers by category and search filter
       const categoryMarkers = markersInFile.filter((marker) => {
-        const markerCategory = marker.category || 'Events';
+        const markerCategory = marker.category || 'Notes';
         return markerCategory === categoryName && this.markerMatchesSearch(marker);
       });
 

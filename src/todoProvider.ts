@@ -5,7 +5,7 @@ export interface TodoInfo {
   task: string;
   line: number;
   position: vscode.Position;
-  type: 'TODO' | 'RESEARCH' | 'EDIT';
+  type: string; // Changed from 'TODO' | 'RESEARCH' | 'EDIT' to string for dynamic types
   fileName: string;
   filePath: string;
 }
@@ -28,24 +28,14 @@ export class TodoTreeItem extends vscode.TreeItem {
     super(todoInfo.task, collapsibleState);
 
     if (itemType === 'taskType') {
-      // This is a task type section (TODO, RESEARCH, EDIT)
+      // This is a task type section (TODO, RESEARCH, EDIT, CUSTOM, etc.)
       this.label = todoInfo.type;
       this.tooltip = `${todoInfo.type} tasks`;
       this.contextValue = 'taskType';
       this.description = `${todoInfo.line} tasks`; // Using line field to store count
 
-      // Different icons for different task types
-      switch (todoInfo.type) {
-        case 'TODO':
-          this.iconPath = new vscode.ThemeIcon('check');
-          break;
-        case 'RESEARCH':
-          this.iconPath = new vscode.ThemeIcon('search');
-          break;
-        case 'EDIT':
-          this.iconPath = new vscode.ThemeIcon('edit');
-          break;
-      }
+      // Icons for different task types - use defaults for custom types
+      this.iconPath = this.getIconForTaskType(todoInfo.type);
     } else {
       // This is an individual task
       const fileName = path.basename(todoInfo.fileName, '.md');
@@ -55,23 +45,63 @@ export class TodoTreeItem extends vscode.TreeItem {
       this.contextValue = 'task';
 
       // Icon based on task type
-      switch (todoInfo.type) {
-        case 'TODO':
-          this.iconPath = new vscode.ThemeIcon('circle');
-          break;
-        case 'RESEARCH':
-          this.iconPath = new vscode.ThemeIcon('book');
-          break;
-        case 'EDIT':
-          this.iconPath = new vscode.ThemeIcon('pencil');
-          break;
-      }
+      this.iconPath = this.getIconForTaskType(todoInfo.type, false);
 
       this.command = {
         command: 'writerdown.goToTask',
         title: 'Go to Task',
         arguments: [todoInfo],
       };
+    }
+  }
+
+  private getIconForTaskType(type: string, isSection: boolean = true): vscode.ThemeIcon {
+    const upperType = type.toUpperCase();
+
+    if (isSection) {
+      // Icons for task type sections
+      switch (upperType) {
+        case 'TODO':
+          return new vscode.ThemeIcon('check');
+        case 'RESEARCH':
+          return new vscode.ThemeIcon('search');
+        case 'EDIT':
+          return new vscode.ThemeIcon('edit');
+        case 'DEADLINE':
+          return new vscode.ThemeIcon('clock');
+        case 'REVIEW':
+          return new vscode.ThemeIcon('eye');
+        case 'FIX':
+          return new vscode.ThemeIcon('tools');
+        case 'IDEA':
+          return new vscode.ThemeIcon('lightbulb');
+        case 'NOTE':
+          return new vscode.ThemeIcon('note');
+        default:
+          return new vscode.ThemeIcon('tag'); // Generic icon for custom types
+      }
+    } else {
+      // Icons for individual tasks
+      switch (upperType) {
+        case 'TODO':
+          return new vscode.ThemeIcon('circle');
+        case 'RESEARCH':
+          return new vscode.ThemeIcon('book');
+        case 'EDIT':
+          return new vscode.ThemeIcon('pencil');
+        case 'DEADLINE':
+          return new vscode.ThemeIcon('watch');
+        case 'REVIEW':
+          return new vscode.ThemeIcon('preview');
+        case 'FIX':
+          return new vscode.ThemeIcon('wrench');
+        case 'IDEA':
+          return new vscode.ThemeIcon('light-bulb');
+        case 'NOTE':
+          return new vscode.ThemeIcon('comment');
+        default:
+          return new vscode.ThemeIcon('dot-fill'); // Generic icon for custom types
+      }
     }
   }
 }
@@ -120,27 +150,41 @@ export class TodoProvider implements vscode.TreeDataProvider<TodoTreeItem> {
   }
 
   private getTaskTypeSections(): TodoTreeItem[] {
-    const taskTypeCounts = {
-      TODO: 0,
-      RESEARCH: 0,
-      EDIT: 0,
-    };
+    const taskTypeCounts: { [key: string]: number } = {};
 
-    // Count tasks by type
+    // Count tasks by type (dynamic types)
     this.todos.forEach((todo) => {
-      taskTypeCounts[todo.type]++;
+      taskTypeCounts[todo.type] = (taskTypeCounts[todo.type] || 0) + 1;
     });
 
     // Create sections for task types that have tasks
     const sections: TodoTreeItem[] = [];
 
-    Object.entries(taskTypeCounts).forEach(([type, count]) => {
+    // Sort task types alphabetically, but keep TODO, RESEARCH, EDIT at the top
+    const priorityTypes = ['TODO', 'RESEARCH', 'EDIT'];
+    const sortedTypes = Object.keys(taskTypeCounts).sort((a, b) => {
+      const aPriority = priorityTypes.indexOf(a);
+      const bPriority = priorityTypes.indexOf(b);
+
+      if (aPriority !== -1 && bPriority !== -1) {
+        return aPriority - bPriority;
+      } else if (aPriority !== -1) {
+        return -1;
+      } else if (bPriority !== -1) {
+        return 1;
+      } else {
+        return a.localeCompare(b);
+      }
+    });
+
+    sortedTypes.forEach((type) => {
+      const count = taskTypeCounts[type];
       if (count > 0) {
         const sectionInfo: TodoInfo = {
           task: type,
           line: count, // Store count in line field
           position: new vscode.Position(0, 0),
-          type: type as 'TODO' | 'RESEARCH' | 'EDIT',
+          type: type,
           fileName: '',
           filePath: '',
         };
@@ -188,29 +232,24 @@ export class TodoProvider implements vscode.TreeDataProvider<TodoTreeItem> {
       const text = document.getText();
       const fileName = path.basename(fileUri.fsPath);
 
-      // Regex to find {{TODO: ...}}, {{RESEARCH: ...}}, {{EDIT: ...}}
-      const todoPatterns = [
-        { regex: /\{\{TODO:\s*([^}]+)\}\}/g, type: 'TODO' as const },
-        { regex: /\{\{RESEARCH:\s*([^}]+)\}\}/g, type: 'RESEARCH' as const },
-        { regex: /\{\{EDIT:\s*([^}]+)\}\}/g, type: 'EDIT' as const },
-      ];
+      // Dynamic regex to find {TYPE: content} patterns
+      const todoRegex = /\{([A-Z_]+):\s*([^}]+)\}/g;
 
-      todoPatterns.forEach((pattern) => {
-        let match;
-        while ((match = pattern.regex.exec(text)) !== null) {
-          const task = match[1].trim();
-          const position = document.positionAt(match.index);
+      let match;
+      while ((match = todoRegex.exec(text)) !== null) {
+        const taskType = match[1].trim();
+        const taskContent = match[2].trim();
+        const position = document.positionAt(match.index);
 
-          this.todos.push({
-            task: task,
-            line: position.line,
-            position: position,
-            type: pattern.type,
-            fileName: fileName,
-            filePath: fileUri.fsPath,
-          });
-        }
-      });
+        this.todos.push({
+          task: taskContent,
+          line: position.line,
+          position: position,
+          type: taskType,
+          fileName: fileName,
+          filePath: fileUri.fsPath,
+        });
+      }
     } catch (error) {
       console.error('Error scanning file for todos:', fileUri.fsPath, error);
     }

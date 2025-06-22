@@ -39,6 +39,8 @@ export function activate(context: vscode.ExtensionContext) {
   const countWords = (text: string): { words: number; characters: number; charactersNoSpaces: number } => {
     // Remove WriterDown-specific syntax for counting
     let cleanText = text
+      // Remove YAML frontmatter
+      .replace(/^---\s*\n[\s\S]*?\n---\s*\n?/m, '')
       // Remove scene markers
       .replace(/\*\*\*\s*SCENE\s+\d+:.*?\*\*\*/gi, '')
       // Remove plot notes
@@ -416,7 +418,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const resetPanelOrderCommand = vscode.commands.registerCommand('writerdown.resetPanelOrder', async () => {
     const selection = await vscode.window.showInformationMessage(
-      'VS Code does not provide an API to programmatically reorder panels.\n\nTo reset panel order manually:\n1. Right-click on panel titles\n2. Drag panels to this order: Structure → Story Events → Characters → Writer Tasks\n\nThis will ensure Alt+Up/Down navigation works correctly.',
+      'VS Code does not provide an API to programmatically reorder panels.\n\nTo reset panel order manually:\n1. Right-click on panel titles\n2. Drag panels to this order: Structure → Story Markers → Characters → Writer Tasks\n\nThis will ensure Alt+Up/Down navigation works correctly.',
       { modal: true },
       'Open Settings',
       'OK',
@@ -430,6 +432,13 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:writerdown');
     }
   });
+
+  // Register internal link provider
+  const linkProvider = vscode.languages.registerDocumentLinkProvider(
+    { language: 'writerdown' },
+    new WriterDownLinkProvider(),
+  );
+  context.subscriptions.push(linkProvider);
 
   // Refresh all providers command (for debugging)
   const refreshAllCommand = vscode.commands.registerCommand('writerdown.refreshAll', async () => {
@@ -1082,5 +1091,41 @@ class CharacterCompletionProvider implements vscode.CompletionItemProvider {
 
     // Add a simple header
     return `Character Card Preview:\n\n${processedContent}`;
+  }
+}
+
+class WriterDownLinkProvider implements vscode.DocumentLinkProvider {
+  public provideDocumentLinks(
+    document: vscode.TextDocument,
+    token: vscode.CancellationToken,
+  ): vscode.ProviderResult<vscode.DocumentLink[]> {
+    const links: vscode.DocumentLink[] = [];
+    const text = document.getText();
+
+    // Regex to find paths like 'Book/Chapter 1.md:123'
+    const linkPattern = /(['"])((?:Book|chapters|scenes)\/[^:'"]+\.md):(\d+)(['"])/g;
+    let match;
+
+    while ((match = linkPattern.exec(text)) !== null) {
+      const filePath = match[2];
+      const lineNumber = parseInt(match[3], 10) - 1; // Convert to 0-based index
+
+      if (vscode.workspace.workspaceFolders) {
+        const fullPath = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, filePath);
+
+        const start = document.positionAt(match.index + 1);
+        const end = document.positionAt(match.index + match[0].length - 1);
+        const range = new vscode.Range(start, end);
+
+        // Create the target URI with fragment for line number
+        const targetUri = fullPath.with({ fragment: `L${lineNumber + 1}` });
+
+        const link = new vscode.DocumentLink(range, targetUri);
+        link.tooltip = 'Alt+click to follow link';
+        links.push(link);
+      }
+    }
+
+    return links;
   }
 }

@@ -25,6 +25,9 @@
       "include": "#plot-notes"
     },
     {
+      "include": "#parentheses"
+    },
+    {
       "include": "#markdown-base"
     }
   ],
@@ -45,29 +48,14 @@
     "writer-highlights": {
       "patterns": [
         {
-          "name": "markup.highlight.todo.writerdown",
-          "match": "\\{\\{TODO:([^}]+)\\}\\}",
+          "name": "markup.highlight.task.writerdown",
+          "match": "\\{([A-Z_]+):([^}]+)\\}",
           "captures": {
             "1": {
-              "name": "string.other.todo.writerdown"
-            }
-          }
-        },
-        {
-          "name": "markup.highlight.research.writerdown",
-          "match": "\\{\\{RESEARCH:([^}]+)\\}\\}",
-          "captures": {
-            "1": {
-              "name": "string.other.research.writerdown"
-            }
-          }
-        },
-        {
-          "name": "markup.highlight.edit.writerdown",
-          "match": "\\{\\{EDIT:([^}]+)\\}\\}",
-          "captures": {
-            "1": {
-              "name": "string.other.edit.writerdown"
+              "name": "entity.name.tasktype.writerdown"
+            },
+            "2": {
+              "name": "string.other.task.writerdown"
             }
           }
         }
@@ -195,11 +183,84 @@
         }
       ]
     },
+    "parentheses": {
+      "patterns": [
+        {
+          "name": "markup.highlight.parentheses.writerdown",
+          "match": "\\(([^\\)]*)\\)",
+          "captures": {
+            "0": {
+              "name": "markup.highlight.parentheses.writerdown"
+            }
+          }
+        }
+      ]
+    },
     "markdown-base": {
       "patterns": [
         {
-          "name": "markup.heading.markdown",
-          "match": "^(#{1,6})\\s+(.*)$",
+          "name": "markup.heading.1.markdown",
+          "match": "^(#)\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.heading.2.markdown",
+          "match": "^(##)\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.heading.3.markdown",
+          "match": "^(###)\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.heading.4.markdown",
+          "match": "^(####)\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.heading.5.markdown",
+          "match": "^(#####)\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "name": "markup.heading.6.markdown",
+          "match": "^(######)\\s+(.*)$",
           "captures": {
             "1": {
               "name": "punctuation.definition.heading.markdown"
