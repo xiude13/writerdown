@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { CharacterInfo, CharacterProvider, CharacterTreeItem } from './characterProvider';
 import { exportNovel } from './export-novel';
@@ -6,9 +7,59 @@ import { NovelFormatter } from './novelFormatter';
 import { StructureInfo, StructureProvider } from './structureProvider';
 import { TodoInfo, TodoProvider } from './todoProvider';
 
+// Helper function to check if current workspace is a WriterDown project
+async function isWriterDownProject(): Promise<boolean> {
+  if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+    return false;
+  }
+
+  const workspaceFolder = vscode.workspace.workspaceFolders[0];
+  const bookFolderUri = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'Book'));
+
+  try {
+    const bookStat = await vscode.workspace.fs.stat(bookFolderUri);
+    return !!(bookStat.type & vscode.FileType.Directory);
+  } catch {
+    return false;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('WriterDown extension is now active!');
 
+  // Check if this is a WriterDown project
+  isWriterDownProject().then(async (isWriterDown) => {
+    if (!isWriterDown) {
+      console.log('Not a WriterDown project, minimal activation mode');
+      // Only register the language command for potential conversion
+      const setLanguageCommand = vscode.commands.registerCommand('writerdown.setLanguage', async () => {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+          await vscode.languages.setTextDocumentLanguage(activeEditor.document, 'writerdown');
+          vscode.window.showInformationMessage('Language set to WriterDown');
+          // Reactivate with full features if this creates a WriterDown project
+          const stillNotWriterDown = !(await isWriterDownProject());
+          if (!stillNotWriterDown) {
+            vscode.window.showInformationMessage(
+              'WriterDown project detected! Reloading extension with full features...',
+            );
+            vscode.commands.executeCommand('workbench.action.reloadWindow');
+          }
+        } else {
+          vscode.window.showWarningMessage('No active editor found');
+        }
+      });
+
+      context.subscriptions.push(setLanguageCommand);
+      return;
+    }
+
+    console.log('WriterDown project detected, full activation mode');
+    activateFullFeatures(context);
+  });
+}
+
+function activateFullFeatures(context: vscode.ExtensionContext) {
   // Create providers
   const characterProvider = new CharacterProvider();
   const todoProvider = new TodoProvider();
@@ -614,7 +665,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const cleanMarkupCommand = vscode.commands.registerCommand('writerdown.cleanMarkup', async () => {
+  const exportCleanMarkdownCommand = vscode.commands.registerCommand('writerdown.exportCleanMarkdown', async () => {
     const editor = vscode.window.activeTextEditor;
     if (!editor || !editor.document.fileName.endsWith('.md')) {
       vscode.window.showErrorMessage('Please open a markdown file to clean markup');
@@ -637,45 +688,6 @@ export function activate(context: vscode.ExtensionContext) {
       );
     } catch (error) {
       vscode.window.showErrorMessage(`Error cleaning markup: ${error}`);
-    }
-  });
-
-  const exportCleanMarkdownCommand = vscode.commands.registerCommand('writerdown.exportCleanMarkdown', async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || !editor.document.fileName.endsWith('.md')) {
-      vscode.window.showErrorMessage('Please open a markdown file to export');
-      return;
-    }
-
-    try {
-      const originalText = editor.document.getText();
-      const cleanedText = NovelFormatter.cleanWriterDownMarkup(originalText);
-
-      // Create output directory
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
-        vscode.window.showErrorMessage('No workspace folder found');
-        return;
-      }
-
-      const fs = require('fs');
-      const path = require('path');
-      const outputDir = path.join(workspaceFolder.uri.fsPath, 'output');
-
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
-
-      // Generate output filename
-      const originalFileName = path.basename(editor.document.fileName, '.md');
-      const outputPath = path.join(outputDir, `${originalFileName}-clean.md`);
-
-      // Write cleaned file
-      fs.writeFileSync(outputPath, cleanedText, 'utf-8');
-
-      vscode.window.showInformationMessage(`Clean markdown exported to: output/${originalFileName}-clean.md`);
-    } catch (error) {
-      vscode.window.showErrorMessage(`Error exporting clean markdown: ${error}`);
     }
   });
 
@@ -811,6 +823,147 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Register analysis commands
+  const analyzeDuplicationsCommand = vscode.commands.registerCommand('writerdown.analyzeDuplications', async () => {
+    await analyzeDuplications();
+  });
+
+  // Helper function to create analysis result document
+  const createAnalysisDocument = async (
+    title: string,
+    content: string,
+    language: string = 'markdown',
+  ): Promise<void> => {
+    // Create a new untitled document
+    const document = await vscode.workspace.openTextDocument({
+      content: content,
+      language: language,
+    });
+
+    // Show the document in a new editor
+    const editor = await vscode.window.showTextDocument(document);
+
+    // Set the document title (this will show in the tab)
+    // Note: VS Code will show "Untitled-1" but the content makes it clear what it is
+    vscode.window.showInformationMessage(`${title} analysis complete`);
+  };
+
+  // Analysis function for duplications
+  const analyzeDuplications = async (): Promise<void> => {
+    try {
+      // Check if this is a WriterDown project
+      if (!(await isWriterDownProject())) {
+        vscode.window.showErrorMessage('Duplication analysis requires a WriterDown project with a Book folder');
+        return;
+      }
+
+      vscode.window.showInformationMessage('Analyzing duplications...');
+
+      // Find all markdown files in the Book folder
+      const files = await vscode.workspace.findFiles('Book/**/*.md', '**/node_modules/**');
+
+      if (files.length === 0) {
+        vscode.window.showWarningMessage('No markdown files found in Book folder');
+        return;
+      }
+
+      // Simple duplication detection (for now, just find repeated sentences)
+      const duplications: Array<{
+        text: string;
+        files: Array<{ fileName: string; line: number; filePath: string }>;
+      }> = [];
+
+      const sentenceMap = new Map<string, Array<{ fileName: string; line: number; filePath: string }>>();
+
+      // Scan all files
+      for (const file of files) {
+        const document = await vscode.workspace.openTextDocument(file);
+        const lines = document.getText().split('\n');
+        const fileName = require('path').basename(file.fsPath);
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+
+          // Skip empty lines, headers, and WriterDown syntax
+          if (
+            !line ||
+            line.startsWith('#') ||
+            line.startsWith('---') ||
+            line.startsWith('@') ||
+            line.startsWith('{{') ||
+            line.startsWith('[[')
+          ) {
+            continue;
+          }
+
+          // Clean the line for comparison
+          const cleanLine = line
+            .replace(/@\[[^\]]+\]/g, '') // Remove character mentions
+            .replace(/@\w+/g, '') // Remove character mentions
+            .replace(/\{\{[^}]+\}\}/g, '') // Remove tasks
+            .replace(/\[\[[^\]]+\]\]/g, '') // Remove notes
+            .trim();
+
+          // Only consider lines with substantial content (more than 20 characters)
+          if (cleanLine.length > 20) {
+            if (!sentenceMap.has(cleanLine)) {
+              sentenceMap.set(cleanLine, []);
+            }
+            sentenceMap.get(cleanLine)!.push({
+              fileName: fileName,
+              line: i + 1,
+              filePath: file.fsPath,
+            });
+          }
+        }
+      }
+
+      // Find duplications (sentences that appear in multiple places)
+      for (const [text, locations] of sentenceMap.entries()) {
+        if (locations.length > 1) {
+          duplications.push({ text, files: locations });
+        }
+      }
+
+      // Generate analysis report
+      let report = `# Duplication Analysis Report\n\n`;
+      report += `**Analysis Date:** ${new Date().toLocaleString()}\n`;
+      report += `**Files Analyzed:** ${files.length}\n`;
+      report += `**Duplications Found:** ${duplications.length}\n\n`;
+
+      if (duplications.length === 0) {
+        report += `## ✅ No Duplications Found\n\n`;
+        report += `Great! No duplicate sentences were detected in your manuscript.\n`;
+      } else {
+        report += `## 🔍 Duplications Detected\n\n`;
+
+        // Sort by number of occurrences (most duplicated first)
+        duplications.sort((a, b) => b.files.length - a.files.length);
+
+        for (let i = 0; i < duplications.length; i++) {
+          const dup = duplications[i];
+          report += `### ${i + 1}. Duplicate Text (${dup.files.length} occurrences)\n\n`;
+          report += `**Text:** "${dup.text}"\n\n`;
+          report += `**Found in:**\n`;
+
+          for (const location of dup.files) {
+            report += `- ${location.fileName}:${location.line}\n`;
+          }
+          report += `\n`;
+        }
+      }
+
+      report += `---\n`;
+      report += `*Generated by WriterDown Duplication Analyzer*\n`;
+
+      // Create and show the analysis document
+      await createAnalysisDocument('Duplication Analysis', report);
+    } catch (error) {
+      console.error('Error analyzing duplications:', error);
+      vscode.window.showErrorMessage(`Failed to analyze duplications: ${error}`);
+    }
+  };
+
   context.subscriptions.push(
     setLanguageCommand,
     refreshStructureCommand,
@@ -847,11 +1000,11 @@ export function activate(context: vscode.ExtensionContext) {
     formatNovelCommand,
     cleanIndentationCommand,
     exportNovelCommand,
-    cleanMarkupCommand,
     exportCleanMarkdownCommand,
     exportChapterCleanCommand,
     exportAllFormatsCommand,
     debugStructureCommand,
+    analyzeDuplicationsCommand,
   );
 
   // Auto-detect .md files and suggest WriterDown language
@@ -885,29 +1038,48 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Refresh providers when document content changes
+  // Consolidated refresh logic with proper debouncing to prevent race conditions
   let refreshTimeout: NodeJS.Timeout | undefined;
+  let isRefreshing = false;
+
+  const debouncedRefreshAll = async () => {
+    if (isRefreshing) {
+      console.log('Refresh already in progress, skipping...');
+      return;
+    }
+
+    // Clear existing timeout
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout);
+    }
+
+    // Debounce the refresh to avoid too many updates
+    refreshTimeout = setTimeout(async () => {
+      if (isRefreshing) return;
+
+      isRefreshing = true;
+      try {
+        await refreshAllProviders();
+      } finally {
+        isRefreshing = false;
+      }
+    }, 1000);
+  };
+
+  // Refresh providers when document content changes
   const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument((event) => {
     if (event.document.fileName.endsWith('.md')) {
-      // Clear existing timeout
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      // Debounce the refresh to avoid too many updates
-      refreshTimeout = setTimeout(async () => {
-        await refreshAllProviders();
-      }, 1000);
+      debouncedRefreshAll();
     }
   });
 
   // Refresh providers when files are created, deleted, or renamed
   const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.md');
   fileWatcher.onDidCreate(async () => {
-    await refreshAllProviders();
+    debouncedRefreshAll();
   });
   fileWatcher.onDidDelete(async () => {
-    await refreshAllProviders();
+    debouncedRefreshAll();
   });
 
   context.subscriptions.push(onDidOpenTextDocument, onDidChangeActiveTextEditor, onDidChangeTextDocument, fileWatcher);
@@ -945,10 +1117,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  // Update project totals on file change
+  // Update project totals on file change (without duplicate refresh)
   const updateProjectTotalsOnChange = async () => {
-    // Refresh structure provider to get latest word counts
-    await structureProvider.refresh();
+    // Only update project totals - structure refresh handled by debouncedRefreshAll
     await updateProjectTotals();
   };
 

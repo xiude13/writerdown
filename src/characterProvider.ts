@@ -99,6 +99,22 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
     // Don't auto-refresh in constructor
   }
 
+  private async isWriterDownProject(): Promise<boolean> {
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      return false;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    const bookFolderUri = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'Book'));
+
+    try {
+      const bookStat = await vscode.workspace.fs.stat(bookFolderUri);
+      return !!(bookStat.type & vscode.FileType.Directory);
+    } catch {
+      return false;
+    }
+  }
+
   setTreeView(treeView: vscode.TreeView<CharacterTreeItem>) {
     this.treeView = treeView;
   }
@@ -302,6 +318,12 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
       return;
     }
 
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      console.log('Not a WriterDown project, skipping character scanning');
+      return;
+    }
+
     try {
       // Find markdown files in the Book folder only for character tracking
       // This focuses the character panel on story content
@@ -398,7 +420,14 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
       return;
     }
 
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      console.log('Not a WriterDown project, skipping character card creation');
+      return;
+    }
+
     const workspaceFolder = vscode.workspace.workspaceFolders[0];
+
     const charactersDir = path.join(workspaceFolder.uri.fsPath, '.characters');
 
     try {
@@ -411,10 +440,13 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
         console.log('Created characters directory');
       }
 
-      // Get all existing character card files
+      // Migrate legacy character cards from root to category folders
+      await this.migrateLegacyCharacterCards(charactersDir);
+
+      // Get all existing character card files (now including category folders)
       const existingCardFiles = await this.getExistingCharacterCards(charactersDir);
 
-      // Create or update character cards for each character
+      // Create character cards for new characters (existing cards are left unchanged)
       for (const [name, character] of this.characters) {
         await this.createOrUpdateCharacterCard(charactersDir, name, character, existingCardFiles);
       }
@@ -431,30 +463,119 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
 
     try {
       const dirUri = vscode.Uri.file(charactersDir);
-      const files = await vscode.workspace.fs.readDirectory(dirUri);
 
-      for (const [fileName, fileType] of files) {
-        if (fileType === vscode.FileType.File && fileName.endsWith('.md')) {
-          let characterName = fileName.replace('.md', '');
-          let isUnreferenced = false;
+      // First, check for files in the root .characters directory (legacy format)
+      try {
+        const files = await vscode.workspace.fs.readDirectory(dirUri);
+        for (const [fileName, fileType] of files) {
+          if (fileType === vscode.FileType.File && fileName.endsWith('.md')) {
+            let characterName = fileName.replace('.md', '');
 
-          // Check if it's an unreferenced character file (starts with underscore)
-          if (characterName.startsWith('_')) {
-            characterName = characterName.substring(1);
-            isUnreferenced = true;
+            // Check if it's an unreferenced character file (starts with underscore)
+            if (characterName.startsWith('_')) {
+              characterName = characterName.substring(1);
+            }
+
+            // Convert underscores back to spaces for character names
+            const displayName = characterName.replace(/_+/g, ' ');
+            cardFiles.set(displayName, fileName); // Store relative path from .characters
           }
-
-          // Convert underscores back to spaces for character names
-          const displayName = characterName.replace(/_+/g, ' ');
-
-          cardFiles.set(displayName, fileName);
         }
+      } catch (error) {
+        // Directory might not exist yet
+      }
+
+      // Then, scan category subdirectories
+      try {
+        const files = await vscode.workspace.fs.readDirectory(dirUri);
+        for (const [itemName, fileType] of files) {
+          if (fileType === vscode.FileType.Directory) {
+            // This is a category folder, scan it for character files
+            const categoryDirUri = vscode.Uri.file(path.join(charactersDir, itemName));
+            try {
+              const categoryFiles = await vscode.workspace.fs.readDirectory(categoryDirUri);
+              for (const [fileName, subFileType] of categoryFiles) {
+                if (subFileType === vscode.FileType.File && fileName.endsWith('.md')) {
+                  let characterName = fileName.replace('.md', '');
+
+                  // Check if it's an unreferenced character file (starts with underscore)
+                  if (characterName.startsWith('_')) {
+                    characterName = characterName.substring(1);
+                  }
+
+                  // Convert underscores back to spaces for character names
+                  const displayName = characterName.replace(/_+/g, ' ');
+                  const relativePath = path.join(itemName, fileName);
+                  cardFiles.set(displayName, relativePath); // Store relative path from .characters
+                }
+              }
+            } catch (error) {
+              console.error(`Error reading category directory ${itemName}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        // Directory might not exist yet
       }
     } catch (error) {
       console.error('Error reading characters directory:', error);
     }
 
     return cardFiles;
+  }
+
+  private async migrateLegacyCharacterCards(charactersDir: string): Promise<void> {
+    try {
+      const dirUri = vscode.Uri.file(charactersDir);
+      const files = await vscode.workspace.fs.readDirectory(dirUri);
+
+      for (const [fileName, fileType] of files) {
+        if (fileType === vscode.FileType.File && fileName.endsWith('.md')) {
+          // This is a legacy character card in the root directory
+          const filePath = path.join(charactersDir, fileName);
+          const fileUri = vscode.Uri.file(filePath);
+
+          try {
+            // Read the file to get the category from metadata
+            const content = Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString('utf8');
+            const metadata = this.parseYamlFrontmatter(content);
+            const category = metadata?.category || 'Uncategorized';
+
+            // Create category directory
+            const sanitizedCategory = category.replace(/[^A-Za-z0-9_\s]/g, '').replace(/\s+/g, '_');
+            const categoryDir = path.join(charactersDir, sanitizedCategory);
+            const categoryDirUri = vscode.Uri.file(categoryDir);
+
+            try {
+              await vscode.workspace.fs.stat(categoryDirUri);
+            } catch {
+              await vscode.workspace.fs.createDirectory(categoryDirUri);
+              console.log(`Created category directory: ${sanitizedCategory}`);
+            }
+
+            // Move the file to the category directory
+            const newFilePath = path.join(categoryDir, fileName);
+            const newFileUri = vscode.Uri.file(newFilePath);
+
+            // Check if target file already exists
+            try {
+              await vscode.workspace.fs.stat(newFileUri);
+              console.log(`Target file already exists, skipping migration: ${fileName}`);
+            } catch {
+              // Target doesn't exist, safe to move
+              await vscode.workspace.fs.writeFile(newFileUri, await vscode.workspace.fs.readFile(fileUri));
+              await vscode.workspace.fs.delete(fileUri);
+              console.log(`Migrated character card: ${fileName} → ${sanitizedCategory}/${fileName}`);
+            }
+          } catch (error) {
+            console.error(`Error migrating character card ${fileName}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      // Directory might not exist or be empty
+      console.log('No legacy character cards to migrate');
+    }
   }
 
   private async createOrUpdateCharacterCard(
@@ -464,53 +585,99 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
     existingFiles: Map<string, string>,
   ): Promise<void> {
     const sanitizedName = name.replace(/\s+/g, '_');
-    const currentFileName = existingFiles.get(name);
+    const currentFilePath = existingFiles.get(name);
     const shouldBeActive = character.count > 0;
-    const expectedFileName = shouldBeActive ? `${sanitizedName}.md` : `_${sanitizedName}.md`;
+    const fileName = shouldBeActive ? `${sanitizedName}.md` : `_${sanitizedName}.md`;
 
-    if (currentFileName && currentFileName !== expectedFileName) {
-      // Need to rename the file
-      await this.renameCharacterCard(charactersDir, currentFileName, expectedFileName);
+    // Load metadata from existing character card if it exists and metadata is not already loaded
+    if (currentFilePath && !character.metadata) {
+      const currentCardPath = path.join(charactersDir, currentFilePath);
+      character.metadata = await this.loadCharacterMetadata(currentCardPath);
     }
 
-    const cardFileName = expectedFileName;
-    const cardPath = path.join(charactersDir, cardFileName);
+    // Determine category folder
+    const category = character.metadata?.category || 'Uncategorized';
+    const sanitizedCategory = category.replace(/[^A-Za-z0-9_\s]/g, '').replace(/\s+/g, '_');
+    const categoryDir = path.join(charactersDir, sanitizedCategory);
+    const expectedRelativePath = path.join(sanitizedCategory, fileName);
+
+    // Create category directory if it doesn't exist
+    const categoryDirUri = vscode.Uri.file(categoryDir);
+    try {
+      await vscode.workspace.fs.stat(categoryDirUri);
+    } catch {
+      await vscode.workspace.fs.createDirectory(categoryDirUri);
+      console.log(`Created category directory: ${sanitizedCategory}`);
+    }
+
+    // Check if file needs to be moved to a different location
+    if (currentFilePath && currentFilePath !== expectedRelativePath) {
+      // Need to move/rename the file
+      await this.moveCharacterCard(charactersDir, currentFilePath, expectedRelativePath);
+    }
+
+    const cardPath = path.join(categoryDir, fileName);
     const cardUri = vscode.Uri.file(cardPath);
 
     try {
       await vscode.workspace.fs.stat(cardUri);
-      // File exists, update it with new references
-      await this.updateCharacterCard(cardUri, character);
+      // File exists, just set the card path - don't update the content
       character.cardPath = cardPath;
+      console.log(`Character card already exists for ${name}: ${expectedRelativePath}`);
     } catch {
       // File doesn't exist, create it
       const cardContent = this.createCharacterCardTemplate(character);
       await vscode.workspace.fs.writeFile(cardUri, Buffer.from(cardContent, 'utf8'));
       character.cardPath = cardPath;
-      console.log(`Created character card for ${name}: ${cardFileName}`);
+      console.log(`Created character card for ${name}: ${expectedRelativePath}`);
     }
   }
 
   private async handleUnreferencedCharacters(charactersDir: string, existingFiles: Map<string, string>): Promise<void> {
     // Find characters that exist as files but are no longer mentioned
-    for (const [characterName, fileName] of existingFiles) {
+    for (const [characterName, relativePath] of existingFiles) {
       if (!this.characters.has(characterName)) {
         // Character is no longer mentioned, ensure it has underscore prefix
+        const fileName = path.basename(relativePath);
         if (!fileName.startsWith('_')) {
           const newFileName = `_${fileName}`;
-          await this.renameCharacterCard(charactersDir, fileName, newFileName);
-          console.log(`Renamed ${fileName} to ${newFileName} (character no longer referenced)`);
+          const newRelativePath = path.join(path.dirname(relativePath), newFileName);
+          await this.moveCharacterCard(charactersDir, relativePath, newRelativePath);
+          console.log(`Renamed ${relativePath} to ${newRelativePath} (character no longer referenced)`);
         }
       }
     }
   }
 
-  private async renameCharacterCard(charactersDir: string, oldFileName: string, newFileName: string): Promise<void> {
+  private async moveCharacterCard(
+    charactersDir: string,
+    oldRelativePath: string,
+    newRelativePath: string,
+  ): Promise<void> {
     try {
-      const oldPath = path.join(charactersDir, oldFileName);
-      const newPath = path.join(charactersDir, newFileName);
+      const oldPath = path.join(charactersDir, oldRelativePath);
+      const newPath = path.join(charactersDir, newRelativePath);
       const oldUri = vscode.Uri.file(oldPath);
       const newUri = vscode.Uri.file(newPath);
+
+      // Check if the old file is currently open in an editor
+      const openEditor = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .find((tab) => {
+          if (tab.input instanceof vscode.TabInputText) {
+            return tab.input.uri.fsPath === oldPath;
+          }
+          return false;
+        });
+
+      // Create the new directory if it doesn't exist
+      const newDir = path.dirname(newPath);
+      const newDirUri = vscode.Uri.file(newDir);
+      try {
+        await vscode.workspace.fs.stat(newDirUri);
+      } catch {
+        await vscode.workspace.fs.createDirectory(newDirUri);
+      }
 
       // Read the old file content
       const content = await vscode.workspace.fs.readFile(oldUri);
@@ -521,85 +688,26 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
       // Delete old file
       await vscode.workspace.fs.delete(oldUri);
 
-      console.log(`Renamed character card: ${oldFileName} → ${newFileName}`);
-    } catch (error) {
-      console.error(`Error renaming character card from ${oldFileName} to ${newFileName}:`, error);
-    }
-  }
+      // If the file was open, close the old tab and open the new one
+      if (openEditor) {
+        // Close the old tab
+        await vscode.window.tabGroups.close(openEditor);
 
-  private async updateCharacterCard(cardUri: vscode.Uri, character: CharacterInfo): Promise<void> {
-    try {
-      // Read existing card content
-      const existingContent = Buffer.from(await vscode.workspace.fs.readFile(cardUri)).toString('utf8');
-
-      // Generate new story references section
-      const mentionsList = character.positions
-        .slice(0, 5) // Show first 5 mentions
-        .map((pos) => `- ${pos.fileName}:${pos.position.line + 1}`)
-        .join('\n');
-
-      const moreReferences = character.count > 5 ? `\n\n*And ${character.count - 5} more mentions...*` : '';
-      const newReferencesSection = `## Story References
-
-${mentionsList}${moreReferences}`;
-
-      // Update the story references section while preserving other content
-      const updatedContent = this.replaceStoryReferencesSection(existingContent, newReferencesSection, character);
-
-      // Write updated content back to file
-      await vscode.workspace.fs.writeFile(cardUri, Buffer.from(updatedContent, 'utf8'));
-      console.log(`Updated character card for ${character.name} with ${character.count} mentions`);
-    } catch (error) {
-      console.error(`Error updating character card for ${character.name}:`, error);
-    }
-  }
-
-  private replaceStoryReferencesSection(
-    content: string,
-    newReferencesSection: string,
-    character: CharacterInfo,
-  ): string {
-    // Pattern to match the Story References section
-    const storyReferencesPattern = /## Story References[\s\S]*?(?=## |$)/;
-
-    if (storyReferencesPattern.test(content)) {
-      // Replace existing Story References section
-      return content.replace(storyReferencesPattern, newReferencesSection + '\n\n');
-    } else {
-      // Add Story References section before the final metadata section
-      const metadataPattern = /---\s*\*Total Mentions:.*$/m;
-
-      if (metadataPattern.test(content)) {
-        return content.replace(metadataPattern, `${newReferencesSection}\n\n$&`);
-      } else {
-        // If no metadata section, add before the last "---" or at the end
-        const lastSeparatorPattern = /---\s*$/;
-        if (lastSeparatorPattern.test(content)) {
-          return content.replace(lastSeparatorPattern, `${newReferencesSection}\n\n---`);
-        } else {
-          // Add at the end
-          return (
-            content +
-            `\n\n${newReferencesSection}\n\n---\n\n*Total Mentions: ${character.count} across ${
-              new Set(character.positions.map((p) => p.fileName)).size
-            } files*\n*Character card updated by WriterDown • ${new Date().toLocaleDateString()}*\n`
-          );
-        }
+        // Open the file in its new location
+        const document = await vscode.workspace.openTextDocument(newUri);
+        await vscode.window.showTextDocument(document);
       }
+
+      console.log(`Moved character card: ${oldRelativePath} → ${newRelativePath}`);
+    } catch (error) {
+      console.error(`Error moving character card from ${oldRelativePath} to ${newRelativePath}:`, error);
     }
   }
 
   private createCharacterCardTemplate(character: CharacterInfo): string {
-    const mentionsList = character.positions
-      .slice(0, 5) // Show first 5 mentions
-      .map((pos) => `- ${pos.fileName}:${pos.position.line + 1}`)
-      .join('\n');
-
-    const moreReferences = character.count > 5 ? `\n\n*And ${character.count - 5} more mentions...*` : '';
-
     return `---
 name: ${character.name}
-category: 
+category: Uncategorized
 role: 
 importance: 
 faction: 
@@ -656,10 +764,6 @@ Internal Conflict:
 External Conflict: 
 Resolution: 
 
-## Story References
-
-${mentionsList}${moreReferences}
-
 ## Notes
 
 
@@ -673,7 +777,7 @@ ${mentionsList}${moreReferences}
   private createNewCharacterTemplate(name: string): string {
     return `---
 name: ${name}
-category: 
+category: Uncategorized
 role: 
 importance: 
 faction: 
@@ -745,6 +849,14 @@ Resolution:
       return;
     }
 
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      vscode.window.showErrorMessage('This command requires a WriterDown project with a Book folder');
+      return;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+
     // Ask user for character name
     const characterName = await vscode.window.showInputBox({
       prompt: 'Enter character name',
@@ -764,8 +876,6 @@ Resolution:
     if (!characterName) {
       return;
     }
-
-    const workspaceFolder = vscode.workspace.workspaceFolders[0];
     const charactersDir = path.join(workspaceFolder.uri.fsPath, '.characters');
 
     try {
@@ -778,11 +888,21 @@ Resolution:
         console.log('Created .characters directory');
       }
 
-      // Create character card (sanitize filename for characters with spaces)
+      // Create character card in Uncategorized folder (sanitize filename for characters with spaces)
       const sanitizedName = characterName.replace(/\s+/g, '_');
+      const categoryDir = path.join(charactersDir, 'Uncategorized');
       const cardFileName = `${sanitizedName}.md`;
-      const cardPath = path.join(charactersDir, cardFileName);
+      const cardPath = path.join(categoryDir, cardFileName);
       const cardUri = vscode.Uri.file(cardPath);
+
+      // Create Uncategorized directory if it doesn't exist
+      const categoryDirUri = vscode.Uri.file(categoryDir);
+      try {
+        await vscode.workspace.fs.stat(categoryDirUri);
+      } catch {
+        await vscode.workspace.fs.createDirectory(categoryDirUri);
+        console.log('Created Uncategorized category directory');
+      }
 
       // Check if character card already exists
       try {
@@ -1343,7 +1463,7 @@ category: ${newCategory}
 
       switch (key) {
         case 'category':
-          if (value) metadata.category = value;
+          if (value && value.trim()) metadata.category = value.trim();
           break;
         case 'role':
           if (value) metadata.role = value;

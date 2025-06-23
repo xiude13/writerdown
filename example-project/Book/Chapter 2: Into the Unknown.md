@@ -12,9 +12,13 @@ status: draft
 
 @Elene entered the **Whispering Woods** just as the first stars appeared. {NOTE: The woods are alive with ancient magic}
 
+The ancient stones beneath her feet hummed with forgotten power.
+
 She thought of @[Marcus The Knight], wondering "if he had walked this same path". @Garry's warnings echoed in her mind.
 
 {EDIT: This description feels too generic. Make it more unique and atmospheric.}
+
+The wind carried whispers of ancient magic that seemed to call her name.
 
 #! [PLOT] The woods test travelers - only those with pure intentions can pass through safely
 

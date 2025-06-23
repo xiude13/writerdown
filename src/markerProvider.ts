@@ -97,6 +97,22 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
     this.refresh();
   }
 
+  private async isWriterDownProject(): Promise<boolean> {
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      return false;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    const bookFolderUri = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'Book'));
+
+    try {
+      const bookStat = await vscode.workspace.fs.stat(bookFolderUri);
+      return !!(bookStat.type & vscode.FileType.Directory);
+    } catch {
+      return false;
+    }
+  }
+
   setTreeView(treeView: vscode.TreeView<MarkerTreeItem>) {
     this.treeView = treeView;
   }
@@ -160,6 +176,12 @@ export class MarkerProvider implements vscode.TreeDataProvider<MarkerTreeItem> {
 
   private async scanForMarkers(): Promise<void> {
     if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      return;
+    }
+
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      console.log('Not a WriterDown project, skipping marker scanning');
       return;
     }
 

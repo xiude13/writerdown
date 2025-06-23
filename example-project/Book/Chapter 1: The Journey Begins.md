@@ -8,11 +8,13 @@ status: draft
 
 @Elene stood at the edge of the cliff, watching the sun set over the valley below. {NOTE: She's been searching for her brother for months}
 
-The wind carried whispers of ancient magic. {TODO: Add more sensory details about the magical atmosphere}
+The wind carried whispers of ancient magic that seemed to call her name. {TODO: Add more sensory details about the magical atmosphere}
+
+The ancient stones beneath her feet hummed with forgotten power.
 
 #! [EVENT] Intro
 
-> "I will find you, @[Marcus The Knight]," she whispered to herself. {EDIT: Make this more emotional and impactful}
+> "I will find you, @[Marcus The Knight]," she whispered @Charles to herself. {EDIT: Make this more emotional and impactful}
 
 **_ SCENE 2: The Village _**
 
@@ -23,6 +25,8 @@ The old man @Garry at the tavern had **weathered hands** and _knowing eyes_. {NO
 "Your brother @[Marcus The Knight]," he said, "he went north. To the _Whispering Woods_." {RESEARCH: Check mythology about whispering woods}
 
 @Garry leaned closer. "But beware, young @Elene. The woods change those who enter." {NOTE: Foreshadowing}
+
+The ancient stones beneath her feet hummed with forgotten power.
 
 ### Writer's Notes
 

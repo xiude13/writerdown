@@ -82,6 +82,22 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
     // Don't auto-refresh in constructor
   }
 
+  private async isWriterDownProject(): Promise<boolean> {
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      return false;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    const bookFolderUri = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'Book'));
+
+    try {
+      const bookStat = await vscode.workspace.fs.stat(bookFolderUri);
+      return !!(bookStat.type & vscode.FileType.Directory);
+    } catch {
+      return false;
+    }
+  }
+
   async refresh(): Promise<void> {
     console.log('StructureProvider: Starting refresh...');
     await this.scanForStructure();
@@ -338,6 +354,12 @@ export class StructureProvider implements vscode.TreeDataProvider<StructureTreeI
 
     if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
       console.log('No workspace folders found');
+      return;
+    }
+
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      console.log('Not a WriterDown project, skipping structure scanning');
       return;
     }
 

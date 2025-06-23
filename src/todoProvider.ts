@@ -118,6 +118,22 @@ export class TodoProvider implements vscode.TreeDataProvider<TodoTreeItem> {
     // Don't auto-refresh in constructor
   }
 
+  private async isWriterDownProject(): Promise<boolean> {
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+      return false;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    const bookFolderUri = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'Book'));
+
+    try {
+      const bookStat = await vscode.workspace.fs.stat(bookFolderUri);
+      return !!(bookStat.type & vscode.FileType.Directory);
+    } catch {
+      return false;
+    }
+  }
+
   async refresh(): Promise<void> {
     await this.scanForTodos();
     this._onDidChangeTreeData.fire();
@@ -201,6 +217,12 @@ export class TodoProvider implements vscode.TreeDataProvider<TodoTreeItem> {
 
     if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
       console.log('No workspace folders found for todo scanning');
+      return;
+    }
+
+    // Check if this is a WriterDown project
+    if (!(await this.isWriterDownProject())) {
+      console.log('Not a WriterDown project, skipping todo scanning');
       return;
     }
 

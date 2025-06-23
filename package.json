@@ -235,11 +235,6 @@
         "category": "WriterDown"
       },
       {
-        "command": "writerdown.cleanMarkup",
-        "title": "Clean WriterDown Markup (Preview)",
-        "category": "WriterDown"
-      },
-      {
         "command": "writerdown.exportCleanMarkdown",
         "title": "Export Clean Markdown File",
         "category": "WriterDown"
@@ -307,6 +302,11 @@
       {
         "command": "writerdown.addChapterMetadata",
         "title": "Add Chapter Metadata",
+        "category": "WriterDown"
+      },
+      {
+        "command": "writerdown.analyzeDuplications",
+        "title": "Analyze Text Duplications",
         "category": "WriterDown"
       }
     ],
@@ -465,9 +465,15 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "build": "npm run compile && rm writerdown-0.0.1.vsix && npx vsce package",
-    "test": "npm run compile && echo 'Tests are integrated into VS Code extension. Use \"WriterDown: Run Tests\" command in VS Code.'"
+    "pretest": "npm run compile && npm run lint",
+    "test": "node ./out/test/runTest.js",
+    "test-compile": "tsc -p ./",
+    "test:coverage": "nyc npm test",
+    "coverage:report": "nyc report --reporter=html",
+    "lint": "echo 'Add linting here if needed'"
   },
   "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@types/glob": "^8.1.0",
     "@types/html-pdf": "^3.0.3",
     "@types/mocha": "^10.0.1",
@@ -477,6 +483,7 @@
     "glob": "^8.1.0",
     "html-pdf": "^3.0.1",
     "mocha": "^10.2.0",
+    "nyc": "^17.1.0",
     "puppeteer": "^24.10.1",
     "typescript": "^4.9.4"
   }
