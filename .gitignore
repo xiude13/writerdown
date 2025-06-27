@@ -4,3 +4,4 @@ out/
 output/
 
 node_modules/
+.vscode-test/
