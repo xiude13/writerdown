@@ -5,3 +5,5 @@ output/
 
 node_modules/
 .vscode-test/
+.nyc_output/
+coverage/
