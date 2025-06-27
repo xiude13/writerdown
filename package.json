@@ -4,6 +4,7 @@
   "description": "Enhanced Markdown syntax highlighting for writers",
   "version": "0.0.1",
   "publisher": "writerdown",
+  "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.74.0"
   },
