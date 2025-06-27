@@ -464,10 +464,9 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "build": "npm run compile && rm writerdown-0.0.1.vsix && npx vsce package",
+    "build": "npm run compile && rm writerdown-0.0.1.vsix && npx vsce package && cursor --install-extension writerdown-0.0.1.vsix",
     "pretest": "npm run compile && npm run lint",
-    "test": "node ./out/test/runTest.js",
-    "test-compile": "tsc -p ./",
+    "test": "npm run compile && node ./out/test/runTest.js",
     "test:coverage": "nyc npm test",
     "coverage:report": "nyc report --reporter=html",
     "lint": "echo 'Add linting here if needed'"

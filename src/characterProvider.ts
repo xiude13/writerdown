@@ -9,6 +9,7 @@ export interface CharacterMetadata {
   location?: string;
   status?: 'active' | 'inactive' | 'deceased';
   tags?: string[];
+  aliases?: string[];
 }
 
 export interface CharacterInfo {
@@ -372,28 +373,71 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
       while ((match = singleWordRegex.exec(text)) !== null) {
         const characterName = match[1];
         const position = document.positionAt(match.index);
-        this.addCharacterMention(characterName, position, fileName, fileUri.fsPath);
+        await this.addCharacterMention(characterName, position, fileName, fileUri.fsPath);
       }
 
       // Scan for bracketed character names (@[Multi Word Name])
       while ((match = bracketedRegex.exec(text)) !== null) {
         const characterName = match[1];
         const position = document.positionAt(match.index);
-        this.addCharacterMention(characterName, position, fileName, fileUri.fsPath);
+        await this.addCharacterMention(characterName, position, fileName, fileUri.fsPath);
       }
     } catch (error) {
       console.error('Error scanning file for characters:', fileUri.fsPath, error);
     }
   }
 
-  private addCharacterMention(
+  private async resolveCharacterAlias(characterName: string): Promise<string> {
+    // Check if any existing character has this name in their aliases
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return characterName;
+    }
+
+    const charactersDir = path.join(workspaceFolder.uri.fsPath, '.characters');
+
+    try {
+      // Get all existing character cards
+      const existingCards = await this.getExistingCharacterCards(charactersDir);
+
+      // Check each character card for aliases
+      for (const [mainCharacterName, cardPath] of existingCards) {
+        const fullCardPath = path.join(charactersDir, cardPath);
+        const cardUri = vscode.Uri.file(fullCardPath);
+
+        try {
+          const content = Buffer.from(await vscode.workspace.fs.readFile(cardUri)).toString('utf8');
+          const metadata = this.parseYamlFrontmatter(content);
+
+          if (metadata?.aliases && metadata.aliases.includes(characterName)) {
+            // This character name is an alias for the main character
+            return mainCharacterName;
+          }
+        } catch (error) {
+          // Continue checking other cards if one fails
+          continue;
+        }
+      }
+    } catch (error) {
+      // If we can't read character cards, just return the original name
+      console.log('Could not resolve aliases, using original name:', characterName);
+    }
+
+    // No alias found, return original name
+    return characterName;
+  }
+
+  private async addCharacterMention(
     characterName: string,
     position: vscode.Position,
     fileName: string,
     filePath: string,
-  ): void {
-    if (this.characters.has(characterName)) {
-      const existing = this.characters.get(characterName)!;
+  ): Promise<void> {
+    // Resolve aliases first
+    const resolvedName = await this.resolveCharacterAlias(characterName);
+
+    if (this.characters.has(resolvedName)) {
+      const existing = this.characters.get(resolvedName)!;
       existing.count++;
       existing.positions.push({
         position: position,
@@ -401,8 +445,8 @@ export class CharacterProvider implements vscode.TreeDataProvider<CharacterTreeI
         filePath: filePath,
       });
     } else {
-      this.characters.set(characterName, {
-        name: characterName,
+      this.characters.set(resolvedName, {
+        name: resolvedName,
         count: 1,
         positions: [
           {
@@ -714,6 +758,7 @@ faction:
 location: 
 status: active
 tags: []
+aliases: []
 ---
 
 # ${character.name}
@@ -784,6 +829,7 @@ faction:
 location: 
 status: active
 tags: []
+aliases: []
 ---
 
 # ${name}
@@ -1491,6 +1537,20 @@ category: ${newCategory}
               .split(',')
               .map((tag) => tag.trim())
               .filter((tag) => tag);
+          }
+          break;
+        case 'aliases':
+          if (value && value.startsWith('[') && value.endsWith(']')) {
+            const aliasesStr = value.slice(1, -1);
+            if (aliasesStr.trim() === '') {
+              // Empty array
+              metadata.aliases = [];
+            } else {
+              metadata.aliases = aliasesStr
+                .split(',')
+                .map((alias) => alias.trim().replace(/^["']|["']$/g, '')) // Remove quotes
+                .filter((alias) => alias);
+            }
           }
           break;
       }
