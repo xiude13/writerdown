@@ -82,11 +82,16 @@ function generateOutputPath(inputPath: string, format: string): string {
     case 'pdf':
       extension = 'pdf';
       break;
-    default:
+    case 'docx': // add doxc case
+      extension = 'docx';
+      break;
+     default:
       extension = 'md';
   }
-
-  return path.join(outputDir, `${parsed.name}-formatted.${extension}`);
+  const cleanName = parsed.name.replace(/-clean$/g, '');
+  
+  // use cleanName only and avoids double '-clean' suffix
+  return path.join(outputDir, `${cleanName}.${extension}`);
 }
 
 async function generatePDF(htmlContent: string, outputPath: string): Promise<void> {

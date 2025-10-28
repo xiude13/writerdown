@@ -690,8 +690,8 @@ function activateFullFeatures(context: vscode.ExtensionContext) {
       vscode.window.showErrorMessage(`Error cleaning markup: ${error}`);
     }
   });
-
-  const exportChapterCleanCommand = vscode.commands.registerCommand('writerdown.exportChapterClean', async () => {
+  
+  const exportChaptersCleanCommand = vscode.commands.registerCommand('writerdown.exportChaptersClean', async () => {
     if (!vscode.workspace.workspaceFolders) {
       vscode.window.showErrorMessage('No workspace folder found');
       return;
@@ -729,7 +729,8 @@ function activateFullFeatures(context: vscode.ExtensionContext) {
         const content = fs.readFileSync(file.fsPath, 'utf-8');
         const cleanedContent = NovelFormatter.cleanWriterDownMarkup(content);
 
-        const fileName = path.basename(file.fsPath, '.md') + '-clean.md';
+        const baseName = path.basename(file.fsPath, '.md').replace(/-clean$/g, '');
+        const fileName = baseName + '-clean.md'; // Use baseName
         const outputPath = path.join(outputDir, fileName);
 
         fs.writeFileSync(outputPath, cleanedContent, 'utf-8');
@@ -1001,7 +1002,7 @@ function activateFullFeatures(context: vscode.ExtensionContext) {
     cleanIndentationCommand,
     exportNovelCommand,
     exportCleanMarkdownCommand,
-    exportChapterCleanCommand,
+    exportChaptersCleanCommand,
     exportAllFormatsCommand,
     debugStructureCommand,
     analyzeDuplicationsCommand,
