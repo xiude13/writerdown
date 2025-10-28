@@ -9,6 +9,7 @@ interface CliOptions {
   output?: string;
   format: 'docx' | 'html' | 'pdf';
   help?: boolean;
+  workspaceRoot?: string; // Add this
 }
 
 function showHelp() {
@@ -64,10 +65,11 @@ function parseArgs(): CliOptions {
   return options;
 }
 
-function generateOutputPath(inputPath: string, format: string): string {
+function generateOutputPath(inputPath: string, format: string, workspaceRoot?: string): string {
   const parsed = path.parse(inputPath);
-  const workspaceRoot = process.cwd();
-  const outputDir = path.join(workspaceRoot, 'output');
+  // added workspaceRoot
+  const root = workspaceRoot || process.cwd();
+  const outputDir = path.join(root, 'output', 'chapters');
 
   // Create output directory if it doesn't exist
   if (!fs.existsSync(outputDir)) {
@@ -85,12 +87,11 @@ function generateOutputPath(inputPath: string, format: string): string {
     case 'docx': // add doxc case
       extension = 'docx';
       break;
-     default:
+    default:
       extension = 'md';
   }
-  const cleanName = parsed.name.replace(/-clean$/g, '');
-  
   // use cleanName only and avoids double '-clean' suffix
+  const cleanName = parsed.name.replace(/-clean$/g, '');
   return path.join(outputDir, `${cleanName}.${extension}`);
 }
 
@@ -236,7 +237,7 @@ async function exportNovel(options: CliOptions): Promise<void> {
     const formattedContent = NovelFormatter.prepareForExport(content, options.format);
 
     // Generate output path if not provided
-    const outputPath = options.output || generateOutputPath(options.input, options.format);
+    const outputPath = options.output || generateOutputPath(options.input, options.format, options.workspaceRoot);
 
     if (options.format === 'pdf') {
       // For PDF, first create HTML, then convert

@@ -653,10 +653,12 @@ function activateFullFeatures(context: vscode.ExtensionContext) {
     if (!format) return;
 
     try {
-      // Use the standalone export function
+      // Use the workspace export function
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
       await exportNovel({
         input: editor.document.fileName,
         format: format as 'docx' | 'html' | 'pdf',
+        workspaceRoot: workspaceRoot // add workspaceRoot
       });
 
       vscode.window.showInformationMessage(`Novel exported successfully in ${format.toUpperCase()} format`);
@@ -778,6 +780,7 @@ function activateFullFeatures(context: vscode.ExtensionContext) {
             await exportNovel({
               input: editor.document.fileName,
               format: format,
+              workspaceRoot: workspaceFolder.uri.fsPath // added workspaceroot
             });
           }
         },
