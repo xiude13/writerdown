@@ -192,8 +192,8 @@ Search "WriterDown" in VS Code Extensions or install from the marketplace.
 - Save your files (project totals update on save)
 - Refresh panels using the refresh button in each panel
 
-### How to Export 
-- In vscode use Ctrl Shift P to open command
+### How To Export 
+- In vscode use `Ctrl+Shift+P` to open command
 - Lookup/Search WriterDown: Export (to your desired format)
 - File Saves into a created output folder within your project directory
 ---
